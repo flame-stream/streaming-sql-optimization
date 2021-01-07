@@ -1,0 +1,79 @@
+plugins {
+    id 'java'
+}
+
+group 'com.chernokoz'
+version '1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+    maven {
+        url "https://packages.confluent.io/maven/"
+    }
+}
+
+// When running via Gradle, this property can be used to pass commandline arguments
+// to the nexmark launch
+def nexmarkArgsProperty = "nexmark.args"
+
+// When running via Gradle, this property sets the runner dependency
+def nexmarkRunnerProperty = "nexmark.runner"
+
+def nexmarkRunnerDependency = project.findProperty(nexmarkRunnerProperty)
+        ?: ":runners:direct-java"
+def shouldProvideSpark = ":runners:spark".equals(nexmarkRunnerDependency)
+def isDataflowRunner = ":runners:google-cloud-dataflow-java".equals(nexmarkRunnerDependency)
+def runnerConfiguration = ":runners:direct-java".equals(nexmarkRunnerDependency) ? "shadow" : null
+
+if (isDataflowRunner) {
+    /*
+     * We need to rely on manually specifying these evaluationDependsOn to ensure that
+     * the following projects are evaluated before we evaluate this project. This is because
+     * we are attempting to reference a property from the project directly.
+     */
+    evaluationDependsOn(":runners:google-cloud-dataflow-java:worker:legacy-worker")
+}
+
+configurations {
+    // A configuration for running the Nexmark launcher directly from Gradle, which
+    // uses Gradle to put the appropriate dependencies on the Classpath rather than
+    // bundling them into a fat jar
+    gradleRun
+}
+
+dependencies {
+    testCompile group: 'junit', name: 'junit', version: '4.12'
+    compile "org.apache.kafka:kafka-clients:2.4.1"
+    implementation "org.apache.beam:beam-vendor-guava-26_0-jre:0.1"
+    implementation 'org.apache.beam:beam-sdks-java-core:2.26.0'
+    implementation 'org.apache.beam:beam-sdks-java-extensions-sql:2.26.0'
+    implementation 'org.apache.beam:beam-sdks-java-extensions-sql-zetasql:2.26.0'
+    implementation 'org.apache.beam:beam-sdks-java-test-utils:2.26.0'
+    implementation 'org.apache.beam:beam-runners-flink-1.10:2.26.0'
+    implementation 'org.apache.beam:beam-sdks-java-io-kafka:2.26.0'
+    implementation 'io.confluent:kafka-avro-serializer:5.3.2'
+    implementation 'org.apache.beam:beam-runners-direct-java:2.13.0'
+    implementation 'org.apache.beam:beam-runners-google-cloud-dataflow-java:2.13.0'
+}
+
+task run(type: JavaExec) {
+    def nexmarkArgsStr =  project.findProperty(nexmarkArgsProperty) ?: ""
+
+    if (isDataflowRunner) {
+        dependsOn ":runners:google-cloud-dataflow-java:worker:legacy-worker:shadowJar"
+
+        def dataflowWorkerJar = project.findProperty('dataflowWorkerJar') ?: project(":runners:google-cloud-dataflow-java:worker:legacy-worker").shadowJar.archivePath
+        // Provide job with a customizable worker jar.
+        // With legacy worker jar, containerImage is set to empty (i.e. to use the internal build).
+        // More context and discussions can be found in PR#6694.
+        nexmarkArgsStr = nexmarkArgsStr +
+                " --dataflowWorkerJar=${dataflowWorkerJar} " +
+                " --workerHarnessContainerImage="
+    }
+
+//    sourceSets.main.java.srcDirs = ['src.main.java']
+
+    main = "org.apache.beam.sdk.nexmark.Main"
+    classpath = sourceSets.main.runtimeClasspath
+    args nexmarkArgsStr.split()
+}
