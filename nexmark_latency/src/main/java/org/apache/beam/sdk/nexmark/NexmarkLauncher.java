@@ -17,22 +17,9 @@
  */
 package org.apache.beam.sdk.nexmark;
 
-import static org.apache.beam.sdk.nexmark.NexmarkUtils.PubSubMode.COMBINED;
-import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkArgument;
-import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkState;
-
 import com.google.api.services.bigquery.model.TableFieldSchema;
 import com.google.api.services.bigquery.model.TableRow;
 import com.google.api.services.bigquery.model.TableSchema;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ThreadLocalRandom;
 import org.apache.beam.sdk.Pipeline;
 import org.apache.beam.sdk.PipelineResult;
 import org.apache.beam.sdk.io.AvroIO;
@@ -44,49 +31,14 @@ import org.apache.beam.sdk.io.kafka.KafkaIO;
 import org.apache.beam.sdk.nexmark.NexmarkUtils.PubSubMode;
 import org.apache.beam.sdk.nexmark.NexmarkUtils.PubsubMessageSerializationMethod;
 import org.apache.beam.sdk.nexmark.NexmarkUtils.SourceType;
-import org.apache.beam.sdk.nexmark.model.Auction;
-import org.apache.beam.sdk.nexmark.model.Bid;
-import org.apache.beam.sdk.nexmark.model.Event;
-import org.apache.beam.sdk.nexmark.model.KnownSize;
-import org.apache.beam.sdk.nexmark.model.Person;
-import org.apache.beam.sdk.nexmark.queries.BoundedSideInputJoin;
-import org.apache.beam.sdk.nexmark.queries.BoundedSideInputJoinModel;
-import org.apache.beam.sdk.nexmark.queries.NexmarkQuery;
-import org.apache.beam.sdk.nexmark.queries.NexmarkQueryModel;
-import org.apache.beam.sdk.nexmark.queries.NexmarkQueryUtil;
-import org.apache.beam.sdk.nexmark.queries.Query0;
-import org.apache.beam.sdk.nexmark.queries.Query0Model;
-import org.apache.beam.sdk.nexmark.queries.Query1;
-import org.apache.beam.sdk.nexmark.queries.Query10;
-import org.apache.beam.sdk.nexmark.queries.Query11;
-import org.apache.beam.sdk.nexmark.queries.Query12;
-import org.apache.beam.sdk.nexmark.queries.Query1Model;
-import org.apache.beam.sdk.nexmark.queries.Query2;
-import org.apache.beam.sdk.nexmark.queries.Query2Model;
-import org.apache.beam.sdk.nexmark.queries.Query3;
-import org.apache.beam.sdk.nexmark.queries.Query3Model;
-import org.apache.beam.sdk.nexmark.queries.Query4;
-import org.apache.beam.sdk.nexmark.queries.Query4Model;
-import org.apache.beam.sdk.nexmark.queries.Query5;
-import org.apache.beam.sdk.nexmark.queries.Query5Model;
-import org.apache.beam.sdk.nexmark.queries.Query6;
-import org.apache.beam.sdk.nexmark.queries.Query6Model;
-import org.apache.beam.sdk.nexmark.queries.Query7;
-import org.apache.beam.sdk.nexmark.queries.Query7Model;
-import org.apache.beam.sdk.nexmark.queries.Query8;
-import org.apache.beam.sdk.nexmark.queries.Query8Model;
-import org.apache.beam.sdk.nexmark.queries.Query9;
-import org.apache.beam.sdk.nexmark.queries.Query9Model;
-import org.apache.beam.sdk.nexmark.queries.SessionSideInputJoin;
-import org.apache.beam.sdk.nexmark.queries.SessionSideInputJoinModel;
+import org.apache.beam.sdk.nexmark.model.*;
+import org.apache.beam.sdk.nexmark.queries.*;
 import org.apache.beam.sdk.nexmark.queries.sql.*;
 import org.apache.beam.sdk.testing.PAssert;
 import org.apache.beam.sdk.testutils.metrics.MetricsReader;
 import org.apache.beam.sdk.transforms.DoFn;
 import org.apache.beam.sdk.transforms.MapElements;
 import org.apache.beam.sdk.transforms.ParDo;
-import org.apache.beam.sdk.transforms.windowing.FixedWindows;
-import org.apache.beam.sdk.transforms.windowing.Window;
 import org.apache.beam.sdk.util.CoderUtils;
 import org.apache.beam.sdk.values.*;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Splitter;
@@ -103,6 +55,15 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import org.joda.time.Duration;
 import org.joda.time.Instant;
 import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.*;
+import java.util.concurrent.ThreadLocalRandom;
+
+import static org.apache.beam.sdk.nexmark.NexmarkUtils.PubSubMode.COMBINED;
+import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkArgument;
+import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkState;
 
 /** Run a single Nexmark query using a given configuration. */
 @SuppressWarnings({

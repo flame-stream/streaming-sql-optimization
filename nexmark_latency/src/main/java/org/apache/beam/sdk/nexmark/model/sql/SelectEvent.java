@@ -55,21 +55,16 @@ public class SelectEvent extends PTransform<PCollection<Event>, PCollection<Row>
     if (!input.hasSchema()) {
       throw new RuntimeException("Input PCollection must have a schema!");
     }
-
     int index = getNestedIndex(input.getSchema());
-    final Schema newSchema = Schema.builder().addFields(input.getSchema().getField(index).getType().getRowSchema().getFields()).addDateTimeField("systemTime").build();
     return input
         .apply(
             ParDo.of(
                 new DoFn<Event, Row>() {
                   @ProcessElement
                   public void processElement(@Element Row row, OutputReceiver<Row> o) {
-                    Row r = row.getRow(index);
-                    Row newRow = Row.withSchema(newSchema).addValues(r.getValues()).addValue(row.getValue("systemTime")).build();
-                    // row.getRow(index)
-                    o.output(newRow);
+                    o.output(row.getRow(index));
                   }
                 }))
-        .setRowSchema(newSchema);
+        .setRowSchema(input.getSchema().getField(index).getType().getRowSchema());
   }
 }

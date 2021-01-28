@@ -21,9 +21,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.Serializable;
-
-import org.apache.beam.sdk.coders.InstantCoder;
-import org.joda.time.Instant;
 import org.apache.beam.sdk.coders.Coder;
 import org.apache.beam.sdk.coders.CustomCoder;
 import org.apache.beam.sdk.coders.VarIntCoder;
@@ -75,7 +72,6 @@ public class Event implements KnownSize, Serializable {
   }
 
   private static final Coder<Integer> INT_CODER = VarIntCoder.of();
-  private static final Coder<Instant> INSTANT_CODER = InstantCoder.of();
 
   public static final Coder<Event> CODER =
       new CustomCoder<Event>() {
@@ -93,8 +89,6 @@ public class Event implements KnownSize, Serializable {
           } else {
             throw new RuntimeException("invalid event");
           }
-          // TODO coder isn't working
-          INSTANT_CODER.encode(value.systemTime, outStream);
         }
 
         @Override
@@ -102,16 +96,13 @@ public class Event implements KnownSize, Serializable {
           int tag = INT_CODER.decode(inStream);
           if (tag == Type.PERSON.value) {
             Person person = Person.CODER.decode(inStream);
-            Instant timestamp = INSTANT_CODER.decode(inStream);
-            return new Event(person, timestamp);
+            return new Event(person);
           } else if (tag == Type.AUCTION.value) {
             Auction auction = Auction.CODER.decode(inStream);
-            Instant timestamp = INSTANT_CODER.decode(inStream);
-            return new Event(auction, timestamp);
+            return new Event(auction);
           } else if (tag == Type.BID.value) {
             Bid bid = Bid.CODER.decode(inStream);
-            Instant timestamp = INSTANT_CODER.decode(inStream);
-            return new Event(bid, timestamp);
+            return new Event(bid);
           } else {
             throw new RuntimeException("invalid event encoding");
           }
@@ -132,56 +123,29 @@ public class Event implements KnownSize, Serializable {
 
   public @org.apache.avro.reflect.Nullable @Nullable Bid bid;
 
-  public Instant systemTime;
-
   @SuppressWarnings("unused")
   public Event() {
     newPerson = null;
     newAuction = null;
     bid = null;
-    systemTime = Instant.now();
   }
 
   public Event(Person newPerson) {
     this.newPerson = newPerson;
     newAuction = null;
     bid = null;
-    systemTime = Instant.now();
-  }
-
-  public Event(Person newPerson, Instant systemTime) {
-    this.newPerson = newPerson;
-    newAuction = null;
-    bid = null;
-    this.systemTime = systemTime;
   }
 
   public Event(Auction newAuction) {
     newPerson = null;
     this.newAuction = newAuction;
     bid = null;
-    systemTime = Instant.now();
-  }
-
-  public Event(Auction newAuction, Instant systemTime) {
-    newPerson = null;
-    this.newAuction = newAuction;
-    bid = null;
-    this.systemTime = systemTime;
   }
 
   public Event(Bid bid) {
     newPerson = null;
     newAuction = null;
     this.bid = bid;
-    systemTime = Instant.now();
-  }
-
-  public Event(Bid bid, Instant systemTime) {
-    newPerson = null;
-    newAuction = null;
-    this.bid = bid;
-    this.systemTime = systemTime;
   }
 
   /** Return a copy of event which captures {@code annotation}. (Used for debugging). */
@@ -209,11 +173,11 @@ public class Event implements KnownSize, Serializable {
   @Override
   public long sizeInBytes() {
     if (newPerson != null) {
-      return 1 + newPerson.sizeInBytes() + 8L;
+      return 1 + newPerson.sizeInBytes();
     } else if (newAuction != null) {
-      return 1 + newAuction.sizeInBytes() + 8L;
+      return 1 + newAuction.sizeInBytes();
     } else if (bid != null) {
-      return 1 + bid.sizeInBytes() + 8L;
+      return 1 + bid.sizeInBytes();
     } else {
       throw new RuntimeException("invalid event");
     }

@@ -26,20 +26,14 @@ import org.apache.beam.sdk.nexmark.model.sql.SelectEvent;
 import org.apache.beam.sdk.nexmark.queries.NexmarkQueryTransform;
 import org.apache.beam.sdk.nexmark.queries.NexmarkQueryUtil;
 import org.apache.beam.sdk.schemas.transforms.Convert;
-import org.apache.beam.sdk.transforms.DoFn;
 import org.apache.beam.sdk.transforms.Filter;
 import org.apache.beam.sdk.transforms.PTransform;
-import org.apache.beam.sdk.transforms.ParDo;
-import org.apache.beam.sdk.transforms.windowing.BoundedWindow;
 import org.apache.beam.sdk.values.PCollection;
 import org.apache.beam.sdk.values.PCollectionTuple;
 import org.apache.beam.sdk.values.PInput;
 import org.apache.beam.sdk.values.Row;
 import org.apache.beam.sdk.values.TupleTag;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Joiner;
-import org.joda.time.Instant;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Query 5, 'Hot Items'. Which auctions have seen the most bids in the last hour (updated every
@@ -59,8 +53,6 @@ import org.slf4j.LoggerFactory;
  * also preserve the bid counts.
  */
 public class SqlQuery5 extends NexmarkQueryTransform<AuctionCount> {
-
-  private static final Logger LOGGER = LoggerFactory.getLogger(SqlQuery5.class);
 
   private static final String QUERY_TEMPLATE =
       Joiner.on("\n\t")
@@ -91,7 +83,7 @@ public class SqlQuery5 extends NexmarkQueryTransform<AuctionCount> {
               "     ) AS CountBids",
               "   GROUP BY CountBids.starttime",
               " ) AS MaxBids ",
-              " ON AuctionBids.starttime = MaxBids.starttime AND AuctionBids.num = MaxBids.maxnum ");
+              " ON AuctionBids.starttime = MaxBids.starttime AND AuctionBids.num >= MaxBids.maxnum ");
 
   private final PTransform<PInput, PCollection<Row>> query;
 
@@ -110,18 +102,8 @@ public class SqlQuery5 extends NexmarkQueryTransform<AuctionCount> {
             .apply(Filter.by(NexmarkQueryUtil.IS_BID))
             .apply(getName() + ".SelectEvent", new SelectEvent(Type.BID));
 
-    PCollection<Row> results = PCollectionTuple.of(new TupleTag<>("Bid"), bids).apply(query);
-
-    return results.apply(ParDo.of(new LoggingFn())).setRowSchema(results.getSchema())
+    return PCollectionTuple.of(new TupleTag<>("Bid"), bids)
+        .apply(query)
         .apply(Convert.fromRows(AuctionCount.class));
-  }
-
-  private static class LoggingFn extends DoFn<Row, Row> {
-    @ProcessElement
-    public void processElement(ProcessContext c, BoundedWindow window, @Timestamp Instant timestamp) {
-      Row row = c.element();
-      LOGGER.error("FINAL " + Instant.now().toString());
-      c.output(row);
-    }
   }
 }
