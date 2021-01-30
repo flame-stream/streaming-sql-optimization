@@ -131,7 +131,7 @@ public class NexmarkConfiguration implements Serializable {
    * that multiple runs will see exactly the same event streams and should thus have exactly the
    * same results.
    */
-  @JsonProperty public boolean useWallclockEventTime = false;
+  @JsonProperty public boolean useWallclockEventTime = true;
 
   /** Average idealized size of a 'new person' event, in bytes. */
   @JsonProperty public int avgPersonByteSize = 200;
@@ -152,13 +152,13 @@ public class NexmarkConfiguration implements Serializable {
   @JsonProperty public int hotBiddersRatio = 4;
 
   /** Window size, in seconds, for queries 3, 5, 7 and 8. */
-  @JsonProperty public long windowSizeSec = 2;
+  @JsonProperty public long windowSizeSec = 5;
 
   /** Sliding window period, in seconds, for query 5. */
   @JsonProperty public long windowPeriodSec = 5;
 
   /** Number of seconds to hold back events according to their reported timestamp. */
-  @JsonProperty public long watermarkHoldbackSec = 0;
+  @JsonProperty public long watermarkHoldbackSec = 1;
 
   /** Average number of auction which should be inflight at any time, per generator. */
   @JsonProperty public int numInFlightAuctions = 100;

@@ -20,9 +20,10 @@ package org.apache.beam.sdk.nexmark.queries.sql;
 import org.apache.beam.sdk.extensions.sql.impl.CalciteQueryPlanner;
 import org.apache.beam.sdk.io.TextIO;
 import org.apache.beam.sdk.nexmark.NexmarkConfiguration;
-import org.apache.beam.sdk.nexmark.latency.NexmarkSqlTransform;
 import org.apache.beam.sdk.nexmark.latency.AddArrivalTime;
 import org.apache.beam.sdk.nexmark.latency.LatencyCombineFn;
+import org.apache.beam.sdk.nexmark.latency.NexmarkSqlTransform;
+import org.apache.beam.sdk.nexmark.model.Bid;
 import org.apache.beam.sdk.nexmark.model.Event;
 import org.apache.beam.sdk.nexmark.model.Event.Type;
 import org.apache.beam.sdk.nexmark.model.Latency;
@@ -51,26 +52,25 @@ public class SqlQuery15 extends NexmarkQueryTransform<Latency> {
     private static final String QUERY_TEMPLATE =
             ""
                     // uncomment this for a simple select with windowing
-
-                    /*+ " SELECT B.systemTime as timestamp1, B.systemTime as timestamp2, B.systemTime as timestamp3"
-                    + "    FROM Bid B "
-                    + "GROUP BY B.auction, B.price, B.bidder, B.dateTime, B.extra, B.systemTime, " +
-                    "TUMBLE(B.systemTime, INTERVAL '%1$d' SECOND)";*/
+                    /* + "SELECT B.dateTime AS timestamp1, B.dateTime AS timestamp2, B.dateTime AS timestamp3, " +
+                      "TUMBLE_START(B.dateTime, INTERVAL '%1$d' SECOND) AS starttime " +
+                      "FROM Bid B GROUP BY B.auction, B.price, B.bidder, B.dateTime, B.extra, " +
+                      "TUMBLE(B.dateTime, INTERVAL '%1$d' SECOND)";*/
 
                     // two joins with windowing
 
-            + "SELECT Bid.systemTime AS timestamp1, " +
-                    "Auction.systemTime AS timestamp2, " +
-                    "Person.systemTime AS timestamp3 " +
+            + "SELECT Bid.dateTime AS timestamp1, " +
+                    "Auction.dateTime AS timestamp2, " +
+                    "Person.dateTime AS timestamp3 " +
                     "FROM (SELECT * FROM Bid B GROUP BY " +
-                        "B.auction, B.price, B.bidder, B.dateTime, B.extra, B.systemTime, " +
-                        "TUMBLE(B.systemTime, INTERVAL '%1$d' SECOND)) AS Bid " +
+                        "B.auction, B.price, B.bidder, B.dateTime, B.extra,  " +
+                        "TUMBLE(B.dateTime, INTERVAL '%1$d' SECOND)) AS Bid " +
                     "JOIN (SELECT * FROM Auction A GROUP BY " +
-                        "A.id, A.itemName, A.description, A.initialBid, A.reserve, A.dateTime, A.expires, A.seller, A.category, A.extra, A.systemTime, " +
-                        "TUMBLE(A.systemTime, INTERVAL '%1$d' SECOND)) AS Auction ON Bid.auction = Auction.id " +
+                        "A.id, A.itemName, A.description, A.initialBid, A.reserve, A.dateTime, A.expires, A.seller, A.category, A.extra,  " +
+                        "TUMBLE(A.dateTime, INTERVAL '%1$d' SECOND)) AS Auction ON Bid.auction = Auction.id " +
                     "JOIN (SELECT * FROM Person P GROUP BY " +
-                        "P.id, P.name, P.emailAddress, P.creditCard, P.city, P.state, P.dateTime, P.extra, P.systemTime, " +
-                        "TUMBLE(P.systemTime, INTERVAL '%1$d' SECOND)) AS Person " +
+                        "P.id, P.name, P.emailAddress, P.creditCard, P.city, P.state, P.dateTime, P.extra, " +
+                        "TUMBLE(P.dateTime, INTERVAL '%1$d' SECOND)) AS Person " +
                     "ON Auction.seller = Person.id";
 
     private final NexmarkSqlTransform query;
@@ -91,6 +91,7 @@ public class SqlQuery15 extends NexmarkQueryTransform<Latency> {
                 allEvents
                         .apply(Filter.by(NexmarkQueryUtil.IS_BID))
                         .apply(getName() + ".SelectEvent", new SelectEvent(Type.BID));
+//        bids.apply(ParDo.of(new LoggingDoFn("BIDS"))).setRowSchema(bids.getSchema());
 
         PCollection<Row> auctions =
                 allEvents
@@ -120,7 +121,8 @@ public class SqlQuery15 extends NexmarkQueryTransform<Latency> {
 
         // adding arrival (from join) time for each tuple to be used for latency calculation
         Schema withArrivalTime = Schema.builder().addFields(results.getSchema().getFields()).addDateTimeField("arrivalTime").build();
-        PCollection<Latency> latency = results.setRowSchema(withArrivalTime)
+        PCollection<Latency> latency = results
+                .setRowSchema(withArrivalTime)
                 .apply(MapElements.via(new AddArrivalTime()))
                 .setRowSchema(withArrivalTime)
                 // calculate latency per window
@@ -151,35 +153,10 @@ public class SqlQuery15 extends NexmarkQueryTransform<Latency> {
         @ProcessElement
         public void processElement(ProcessContext c, BoundedWindow window, @Timestamp Instant timestamp) {
             Row row = c.element();
-            if (row != null) {
-                // log smth here if you'd like
-                LOGGER.error("");
-            }
+            /*if (row != null) {
+                // do smth here
+            }*/
             c.output(row);
-        }
-    }
-
-    // keeping this for posterity. examples of building rows/schemas
-    private static class RemoveTimestamp extends DoFn<Row, Row> {
-        @ProcessElement
-        public void processElement(ProcessContext c, BoundedWindow window, @Timestamp Instant timestamp) {
-            Row row = c.element();
-            Schema.Builder builder = Schema.builder();
-            if (row != null) {
-                for (Schema.Field f : row.getSchema().getFields()) {
-                    if (!f.getName().equals("systemTime")) {
-                        builder.addField(f);
-                    }
-                }
-                Schema schema = builder.build();
-                Row.Builder rowBuilder = Row.withSchema(schema);
-                for (Schema.Field f : schema.getFields()) {
-                    rowBuilder.addValue(row.getValue(f.getName()));
-                }
-                c.output(rowBuilder.build());
-            } else {
-                c.output(Row.nullRow(Schema.builder().build()));
-            }
         }
     }
 }

@@ -26,19 +26,13 @@ import org.apache.beam.sdk.nexmark.model.sql.SelectEvent;
 import org.apache.beam.sdk.nexmark.queries.NexmarkQueryTransform;
 import org.apache.beam.sdk.nexmark.queries.NexmarkQueryUtil;
 import org.apache.beam.sdk.schemas.transforms.Convert;
-import org.apache.beam.sdk.transforms.DoFn;
 import org.apache.beam.sdk.transforms.Filter;
 import org.apache.beam.sdk.transforms.PTransform;
-import org.apache.beam.sdk.transforms.ParDo;
-import org.apache.beam.sdk.transforms.windowing.BoundedWindow;
 import org.apache.beam.sdk.values.PCollection;
 import org.apache.beam.sdk.values.PCollectionTuple;
 import org.apache.beam.sdk.values.PInput;
 import org.apache.beam.sdk.values.Row;
 import org.apache.beam.sdk.values.TupleTag;
-import org.joda.time.Instant;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Query 7, 'Highest Bid'. Select the bids with the highest bid price in the last minute. In CQL
@@ -54,8 +48,6 @@ import org.slf4j.LoggerFactory;
  * <p>We will use a shorter window to help make testing easier.
  */
 public class SqlQuery7 extends NexmarkQueryTransform<Bid> {
-
-  private static final Logger LOGGER = LoggerFactory.getLogger(SqlQuery7.class);
 
   private static final String QUERY_TEMPLATE =
       ""
@@ -87,27 +79,8 @@ public class SqlQuery7 extends NexmarkQueryTransform<Bid> {
             .apply(Filter.by(NexmarkQueryUtil.IS_BID))
             .apply(getName() + ".SelectEvent", new SelectEvent(Type.BID));
 
-    PCollection<Row> helper = bids.apply(ParDo.of(new LoggingDoFn())).setRowSchema(bids.getSchema());
-
-    PCollection<Row> results = PCollectionTuple.of(new TupleTag<>("Bid"), helper).apply(query);
-
-
-    return results.apply(ParDo.of(new LoggingDoFn())).setRowSchema(results.getSchema())
-            .apply(Convert.fromRows(Bid.class));
-
-    /*return PCollectionTuple.of(new TupleTag<>("Bid"), bids)
+    return PCollectionTuple.of(new TupleTag<>("Bid"), bids)
         .apply(query)
-        .apply(Convert.fromRows(Bid.class));*/
-  }
-
-  private static class LoggingDoFn extends DoFn<Row, Row> {
-    @ProcessElement
-    public void processElement(ProcessContext c, BoundedWindow window, @Timestamp Instant timestamp) {
-      Row row = c.element();
-      if (row != null) {
-        LOGGER.error("FINAL " + row.getValues());
-      }
-      c.output(row);
-    }
+        .apply(Convert.fromRows(Bid.class));
   }
 }

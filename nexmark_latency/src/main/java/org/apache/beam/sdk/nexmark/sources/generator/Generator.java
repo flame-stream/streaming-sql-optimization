@@ -17,22 +17,21 @@
  */
 package org.apache.beam.sdk.nexmark.sources.generator;
 
+import static org.apache.beam.sdk.nexmark.sources.generator.model.AuctionGenerator.nextAuction;
+import static org.apache.beam.sdk.nexmark.sources.generator.model.BidGenerator.nextBid;
+import static org.apache.beam.sdk.nexmark.sources.generator.model.PersonGenerator.nextPerson;
+import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkNotNull;
+
+import java.io.Serializable;
+import java.util.Iterator;
+import java.util.Objects;
+import java.util.Random;
 import org.apache.beam.sdk.nexmark.model.Bid;
 import org.apache.beam.sdk.nexmark.model.Event;
 import org.apache.beam.sdk.values.TimestampedValue;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.joda.time.DateTime;
 import org.joda.time.Instant;
-
-import java.io.Serializable;
-import java.util.Iterator;
-import java.util.Objects;
-import java.util.Random;
-
-import static org.apache.beam.sdk.nexmark.sources.generator.model.AuctionGenerator.nextAuction;
-import static org.apache.beam.sdk.nexmark.sources.generator.model.BidGenerator.nextBid;
-import static org.apache.beam.sdk.nexmark.sources.generator.model.PersonGenerator.nextPerson;
-import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkNotNull;
 
 /**
  * A generator for synthetic events. We try to make the data vaguely reasonable. We also ensure most

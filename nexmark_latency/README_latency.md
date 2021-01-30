@@ -4,7 +4,7 @@
 See the file `SqlQuery15.java`. The current query is just two joins without much meaning but it could be any query (see that necessary adjustments are made to class `Latency`. I know, I know, it's not the smartest design in the universe).
 
 ## How to run
-`./gradlew :sdks:java:testing:nexmark:run -Pnexmark.runner=":runners:flink:1.11" -Pnexmark.args="--runner=FlinkRunner --query=15 --queryLanguage=sql --streaming=true --manageResources=false --monitorJobs=true --flinkMaster=[local] --latencyLogDirectory=/home/your/log/directory/" `
+`./gradlew :run -Pnexmark.runner=":runners:flink:1.11" -Pnexmark.args="--runner=FlinkRunner --query=15 --queryLanguage=sql --streaming=true --manageResources=false --monitorJobs=true --flinkMaster=[local] --latencyLogDirectory=/home/your/log/directory/" `
 
 ## Implementation details
 `systemTime` field has been added to `Event` to specify the event generation time. 
