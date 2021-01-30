@@ -54,6 +54,7 @@ dependencies {
     implementation 'io.confluent:kafka-avro-serializer:5.3.2'
     implementation 'org.apache.beam:beam-runners-direct-java:2.13.0'
     implementation 'org.apache.beam:beam-runners-google-cloud-dataflow-java:2.13.0'
+    implementation group: 'org.slf4j', name: 'slf4j-simple', version: '1.7.30'
 }
 
 task run(type: JavaExec) {
