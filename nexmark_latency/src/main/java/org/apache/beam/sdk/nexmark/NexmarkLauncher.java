@@ -1280,6 +1280,9 @@ public class NexmarkLauncher<OptionT extends NexmarkOptions> {
                 configuration,
                 SqlBoundedSideInputJoin.calciteSqlBoundedSideInputJoin(configuration)))
         .put(NexmarkQueryName.TEST_SQL_QUERY, new NexmarkQuery(configuration, new SqlQuery15(configuration)))
+        .put(NexmarkQueryName.TEST_SQL_QUERY_V2, new NexmarkQuery(configuration, new SqlQuery16(configuration)))
+        .put(NexmarkQueryName.TEST_SQL_QUERY_V3, new NexmarkQuery(configuration, new SqlQuery17(configuration)))
+        .put(NexmarkQueryName.TEST_SQL_QUERY_V4, new NexmarkQuery(configuration, new SqlQuery18(configuration)))
         .build();
   }
 

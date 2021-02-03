@@ -48,7 +48,10 @@ public enum NexmarkQueryName {
   BOUNDED_SIDE_INPUT_JOIN(13),
   SESSION_SIDE_INPUT_JOIN(14),
 
-  TEST_SQL_QUERY(15);
+  TEST_SQL_QUERY(15),
+  TEST_SQL_QUERY_V2(16),
+  TEST_SQL_QUERY_V3(17),
+  TEST_SQL_QUERY_V4(18);
 
   private @Nullable Integer number;
 

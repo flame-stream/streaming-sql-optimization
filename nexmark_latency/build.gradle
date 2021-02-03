@@ -66,6 +66,7 @@ dependencies {
   implementation 'org.apache.beam:beam-sdks-java-extensions-sql-zetasql:2.27.0'
   implementation 'org.apache.beam:beam-sdks-java-test-utils:2.27.0'
   implementation 'org.apache.beam:beam-runners-flink-1.11:2.27.0'
+  implementation 'org.apache.beam:beam-runners-spark:2.27.0'
   implementation 'org.apache.beam:beam-sdks-java-io-kafka:2.27.0'
   implementation 'io.confluent:kafka-avro-serializer:5.3.2'
   implementation 'org.apache.beam:beam-runners-direct-java:2.13.0'

@@ -91,7 +91,7 @@ public class NexmarkConfiguration implements Serializable {
    * Number of events to generate. If zero, generate as many as possible without overflowing
    * internal counters etc.
    */
-  @JsonProperty public long numEvents = 100000;
+  @JsonProperty public long numEvents = 1000000;
 
   /** Number of event generators to use. Each generates events in its own timeline. */
   @JsonProperty public int numEventGenerators = 1;
@@ -100,10 +100,10 @@ public class NexmarkConfiguration implements Serializable {
   @JsonProperty public NexmarkUtils.RateShape rateShape = NexmarkUtils.RateShape.SINE;
 
   /** Initial overall event rate (in {@link #rateUnit}). */
-  @JsonProperty public int firstEventRate = 10000;
+  @JsonProperty public int firstEventRate = 50000;
 
   /** Next overall event rate (in {@link #rateUnit}). */
-  @JsonProperty public int nextEventRate = 10000;
+  @JsonProperty public int nextEventRate = 50000;
 
   /** Unit for rates. */
   @JsonProperty public NexmarkUtils.RateUnit rateUnit = NexmarkUtils.RateUnit.PER_SECOND;
@@ -152,7 +152,7 @@ public class NexmarkConfiguration implements Serializable {
   @JsonProperty public int hotBiddersRatio = 4;
 
   /** Window size, in seconds, for queries 3, 5, 7 and 8. */
-  @JsonProperty public long windowSizeSec = 5;
+  @JsonProperty public long windowSizeSec = 1;
 
   /** Sliding window period, in seconds, for query 5. */
   @JsonProperty public long windowPeriodSec = 5;

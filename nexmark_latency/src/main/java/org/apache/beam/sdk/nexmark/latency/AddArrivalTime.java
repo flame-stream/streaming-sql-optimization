@@ -10,6 +10,8 @@ import org.slf4j.LoggerFactory;
 public class AddArrivalTime extends SimpleFunction<Row, Row> {
     @Override
     public Row apply(Row input) {
-        return Row.fromRow(input).withFieldValue("arrivalTime", Instant.now()).build();
+        Instant now = Instant.now();
+        System.out.println("added arrival time: " + now);
+        return Row.fromRow(input).withFieldValue("arrivalTime", now).build();
     }
 }
