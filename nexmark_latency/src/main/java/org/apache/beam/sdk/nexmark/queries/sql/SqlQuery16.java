@@ -33,10 +33,7 @@ import org.apache.beam.sdk.transforms.*;
 import org.apache.beam.sdk.transforms.windowing.BoundedWindow;
 import org.apache.beam.sdk.transforms.windowing.FixedWindows;
 import org.apache.beam.sdk.transforms.windowing.Window;
-import org.apache.beam.sdk.values.PCollection;
-import org.apache.beam.sdk.values.PCollectionTuple;
-import org.apache.beam.sdk.values.Row;
-import org.apache.beam.sdk.values.TupleTag;
+import org.apache.beam.sdk.values.*;
 import org.joda.time.Duration;
 import org.joda.time.Instant;
 import org.slf4j.Logger;
@@ -46,29 +43,13 @@ public class SqlQuery16 extends NexmarkQueryTransform<Latency> {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(SqlQuery16.class);
 
-//    private static final String QUERY =
-//        ""
-//          + " SELECT "
-//          + "    B.receiveTime AS timestamp1, A.receiveTime AS timestamp2, P.receiveTime AS timestamp3"
-//          + " FROM "
-//          + "    Auction A INNER JOIN Person P on A.seller = P.id "
-//          + "       INNER JOIN Bid B on B.bidder = P.id";
-
-    private static final String QUERY =
-            ""
-                    + " SELECT "
-                    + "    P.name, P.city, P.state, B.price, B.receiveTime AS timestamp1,"
-                    + "         A.receiveTime AS timestamp2, P.receiveTime AS timestamp3"
-                    + " FROM "
-                    + "    Auction A INNER JOIN Person P on A.seller = P.id "
-                    + "       INNER JOIN Bid B on B.bidder = P.id";
-
-    private static final String SIMPLE_QUERY =
-            ""
-                    + " SELECT "
-                    + "    B.receiveTime AS timestamp1, B.receiveTime AS timestamp2, B.receiveTime AS timestamp3"
-                    + " FROM "
-                    + "    Bid B";
+    private static final String QUERY_1 =
+        ""
+          + " SELECT "
+          + "    B.receiveTime AS timestamp1, A.receiveTime AS timestamp2, P.receiveTime AS timestamp3"
+          + " FROM "
+          + "    Auction A INNER JOIN Person P on A.seller = P.id "
+          + "       INNER JOIN Bid B on B.bidder = P.id";
 
     private final NexmarkSqlTransform query;
 
@@ -78,7 +59,7 @@ public class SqlQuery16 extends NexmarkQueryTransform<Latency> {
         super("SqlQuery16");
 
         this.configuration = configuration;
-        query = NexmarkSqlTransform.query(SIMPLE_QUERY).withQueryPlannerClass(CalciteQueryPlanner.class);
+        query = NexmarkSqlTransform.query(QUERY_1).withQueryPlannerClass(CalciteQueryPlanner.class);
     }
 
     @Override
@@ -148,11 +129,6 @@ public class SqlQuery16 extends NexmarkQueryTransform<Latency> {
 //                 calculate latency per window
                 .apply(Combine.globally(new LatencyCombineFn()).withoutDefaults());
 
-//        PCollection<Row> latency = results
-//                .setRowSchema(withArrivalTime)
-//                .apply(MapElements.via(new AddArrivalTime()))
-//                .setRowSchema(withArrivalTime);
-
         latency.apply(ToString.elements())
                 .apply(TextIO.write().to(configuration.latencyLogDirectory)
                         .withWindowedWrites()
@@ -160,7 +136,6 @@ public class SqlQuery16 extends NexmarkQueryTransform<Latency> {
                         .withSuffix(".txt"));
 
         return latency;
-//        return latency.apply(Convert.fromRows(NameCityStatePriceReceiveArrivalTimes.class));
     }
 
     /**
