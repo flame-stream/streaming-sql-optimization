@@ -45,11 +45,17 @@ public class LatencyCombineFn extends Combine.CombineFn<Row, LatencyCombineFn.Ac
                 }
                 if (arrivalTime != null) {
                     // uncomment to calculate the mean value
-                    // mutableAccumulator.sum += outputTime.minus(timestamp.getMillis()).getMillis();
+//                     mutableAccumulator.sum += arrivalTime.minus(timestamp.getMillis()).getMillis();
+//                     mutableAccumulator.count++;
 
                     // store the element with max arrival time
                     if (timestamp.getMillis() > mutableAccumulator.first) {
                         mutableAccumulator.first = timestamp.getMillis();
+//                        mutableAccumulator.second = arrivalTime.getMillis();
+                    }
+
+                    // store last element exit time as a second
+                    if (arrivalTime.getMillis() > mutableAccumulator.second) {
                         mutableAccumulator.second = arrivalTime.getMillis();
                     }
                 }
@@ -67,8 +73,8 @@ public class LatencyCombineFn extends Combine.CombineFn<Row, LatencyCombineFn.Ac
                 merged.second = accum.second;
             }
             // uncomment when calculating the mean value instead of the max value
-            // merged.sum += accum.sum;
-            // merged.count += accum.count;
+//             merged.sum += accum.sum;
+//             merged.count += accum.count;
         }
         return merged;
     }
@@ -77,7 +83,7 @@ public class LatencyCombineFn extends Combine.CombineFn<Row, LatencyCombineFn.Ac
     public Latency extractOutput(Accumulator accumulator) {
         if (accumulator != null) {
             // uncomment when calculating the mean value instead of the max value
-            // return new Latency(accumulator.sum / accumulator.count);
+//             return new Latency(accumulator.sum / accumulator.count);
             return new Latency(accumulator.second - accumulator.first);
         }
         return new Latency(0);

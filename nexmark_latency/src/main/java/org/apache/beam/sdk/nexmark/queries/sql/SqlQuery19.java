@@ -22,48 +22,73 @@ import org.apache.beam.sdk.io.TextIO;
 import org.apache.beam.sdk.nexmark.NexmarkConfiguration;
 import org.apache.beam.sdk.nexmark.latency.AddArrivalTime;
 import org.apache.beam.sdk.nexmark.latency.AddReceiveTime;
-import org.apache.beam.sdk.nexmark.latency.LatencyCombineFn;
 import org.apache.beam.sdk.nexmark.latency.NexmarkSqlTransform;
-import org.apache.beam.sdk.nexmark.model.*;
+import org.apache.beam.sdk.nexmark.model.Auction;
+import org.apache.beam.sdk.nexmark.model.Event;
 import org.apache.beam.sdk.nexmark.model.Event.Type;
+import org.apache.beam.sdk.nexmark.model.NameCityStatePriceReceiveArrivalTimes;
+import org.apache.beam.sdk.nexmark.model.Person;
 import org.apache.beam.sdk.nexmark.model.sql.SelectEvent;
 import org.apache.beam.sdk.nexmark.queries.NexmarkQueryTransform;
 import org.apache.beam.sdk.schemas.Schema;
-import org.apache.beam.sdk.transforms.*;
+import org.apache.beam.sdk.schemas.transforms.Convert;
+import org.apache.beam.sdk.transforms.DoFn;
+import org.apache.beam.sdk.transforms.Filter;
+import org.apache.beam.sdk.transforms.MapElements;
+import org.apache.beam.sdk.transforms.ToString;
 import org.apache.beam.sdk.transforms.windowing.BoundedWindow;
 import org.apache.beam.sdk.transforms.windowing.FixedWindows;
 import org.apache.beam.sdk.transforms.windowing.Window;
-import org.apache.beam.sdk.values.*;
+import org.apache.beam.sdk.values.PCollection;
+import org.apache.beam.sdk.values.PCollectionTuple;
+import org.apache.beam.sdk.values.Row;
+import org.apache.beam.sdk.values.TupleTag;
 import org.joda.time.Duration;
 import org.joda.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class SqlQuery17 extends NexmarkQueryTransform<Latency> {
+public class SqlQuery19 extends NexmarkQueryTransform<NameCityStatePriceReceiveArrivalTimes> {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(SqlQuery17.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(SqlQuery19.class);
 
-    private static final String QUERY_2 =
+//    private static final String QUERY =
+//        ""
+//          + " SELECT "
+//          + "    B.receiveTime AS timestamp1, A.receiveTime AS timestamp2, P.receiveTime AS timestamp3"
+//          + " FROM "
+//          + "    Auction A INNER JOIN Person P on A.seller = P.id "
+//          + "       INNER JOIN Bid B on B.bidder = P.id";
+
+    private static final String QUERY =
             ""
                     + " SELECT "
-                    + "    B.receiveTime AS timestamp1, A.receiveTime AS timestamp2, P.receiveTime AS timestamp3"
+                    + "    P.name, P.city, P.state, B.price, B.receiveTime AS timestamp1,"
+                    + "         A.receiveTime AS timestamp2, P.receiveTime AS timestamp3"
                     + " FROM "
-                    + "    Person P INNER JOIN Bid B on B.bidder = P.id"
-                    + "           INNER JOIN Auction A on A.seller = P.id";
+                    + "    Auction A INNER JOIN Person P on A.seller = P.id "
+                    + "       INNER JOIN Bid B on B.bidder = P.id";
+
+    private static final String SIMPLE_QUERY =
+            ""
+                    + " SELECT "
+                    + "    B.receiveTime AS timestamp1, B.receiveTime AS timestamp2, B.receiveTime AS timestamp3"
+                    + " FROM "
+                    + "    Bid B";
 
     private final NexmarkSqlTransform query;
 
     private final NexmarkConfiguration configuration;
 
-    public SqlQuery17(NexmarkConfiguration configuration) {
-        super("SqlQuery17");
+    public SqlQuery19(NexmarkConfiguration configuration) {
+        super("SqlQuery19");
 
         this.configuration = configuration;
-        query = NexmarkSqlTransform.query(QUERY_2).withQueryPlannerClass(CalciteQueryPlanner.class);
+        query = NexmarkSqlTransform.query(QUERY).withQueryPlannerClass(CalciteQueryPlanner.class);
     }
 
     @Override
-    public PCollection<Latency> expand(PCollection<Event> allEvents) {
+    public PCollection<NameCityStatePriceReceiveArrivalTimes> expand(PCollection<Event> allEvents) {
         PCollection<Event> windowed =
                 allEvents.apply(
                         Window.into(FixedWindows.of(Duration.standardSeconds(configuration.windowSizeSec))));
@@ -122,12 +147,10 @@ public class SqlQuery17 extends NexmarkQueryTransform<Latency> {
         Schema withArrivalTime = Schema.builder()
                 .addFields(results.getSchema().getFields()).addDateTimeField("arrivalTime").build();
 
-        PCollection<Latency> latency = results
+        PCollection<Row> latency = results
                 .setRowSchema(withArrivalTime)
                 .apply(MapElements.via(new AddArrivalTime()))
-                .setRowSchema(withArrivalTime)
-//                 calculate latency per window
-                .apply(Combine.globally(new LatencyCombineFn()).withoutDefaults());
+                .setRowSchema(withArrivalTime);
 
         latency.apply(ToString.elements())
                 .apply(TextIO.write().to(configuration.latencyLogDirectory)
@@ -135,7 +158,7 @@ public class SqlQuery17 extends NexmarkQueryTransform<Latency> {
                         .withNumShards(1)
                         .withSuffix(".txt"));
 
-        return latency;
+        return latency.apply(Convert.fromRows(NameCityStatePriceReceiveArrivalTimes.class));
     }
 
     /**

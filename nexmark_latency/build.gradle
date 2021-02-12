@@ -74,7 +74,7 @@ dependencies {
   implementation 'com.google.auto.value:auto-value-annotations:1.6'
   annotationProcessor 'com.google.auto.value:auto-value:1.6'
   testCompile group: 'org.hamcrest', name: 'hamcrest', version: '2.2'
-
+  implementation group: 'org.slf4j', name: 'slf4j-simple', version: '1.7.30'
 }
 
 if (shouldProvideSpark) {

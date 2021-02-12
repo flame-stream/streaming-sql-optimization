@@ -20,6 +20,7 @@ package org.apache.beam.sdk.nexmark;
 import com.google.api.services.bigquery.model.TableFieldSchema;
 import com.google.api.services.bigquery.model.TableRow;
 import com.google.api.services.bigquery.model.TableSchema;
+import org.apache.beam.repackaged.direct_java.runners.core.construction.renderer.PipelineDotRenderer;
 import org.apache.beam.sdk.Pipeline;
 import org.apache.beam.sdk.PipelineResult;
 import org.apache.beam.sdk.io.AvroIO;
@@ -1166,8 +1167,12 @@ public class NexmarkLauncher<OptionT extends NexmarkOptions> {
         sink(results, now.getMillis());
       }
 
+      String dotString = PipelineDotRenderer.toDotString(p);
+      LOG.error(dotString);
+
       mainResult = p.run();
       mainResult.waitUntilFinish(Duration.standardSeconds(configuration.streamTimeout));
+
       return monitor(query);
     } finally {
       if (pubsubHelper != null) {
@@ -1280,9 +1285,11 @@ public class NexmarkLauncher<OptionT extends NexmarkOptions> {
                 configuration,
                 SqlBoundedSideInputJoin.calciteSqlBoundedSideInputJoin(configuration)))
         .put(NexmarkQueryName.TEST_SQL_QUERY, new NexmarkQuery(configuration, new SqlQuery15(configuration)))
-        .put(NexmarkQueryName.TEST_SQL_QUERY_V2, new NexmarkQuery(configuration, new SqlQuery16(configuration)))
-        .put(NexmarkQueryName.TEST_SQL_QUERY_V3, new NexmarkQuery(configuration, new SqlQuery17(configuration)))
-        .put(NexmarkQueryName.TEST_SQL_QUERY_V4, new NexmarkQuery(configuration, new SqlQuery18(configuration)))
+        .put(NexmarkQueryName.LATENCY_SQL_QUERY_1, new NexmarkQuery(configuration, new SqlQuery16(configuration)))
+        .put(NexmarkQueryName.LATENCY_SQL_QUERY_2, new NexmarkQuery(configuration, new SqlQuery17(configuration)))
+        .put(NexmarkQueryName.TEST_SQL_QUERY_TIMES, new NexmarkQuery(configuration, new SqlQuery18(configuration)))
+        .put(NexmarkQueryName.TEST_SQL_QUERY_TIMES_AND_RES,
+                new NexmarkQuery(configuration, new SqlQuery19(configuration)))
         .build();
   }
 
