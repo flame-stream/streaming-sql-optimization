@@ -218,6 +218,12 @@ public interface NexmarkOptions
 
   void setAvgPersonByteSize(Integer avgPersonByteSize);
 
+  @Description("Average size in bytes for a page view record.")
+  @Nullable
+  Integer getAvgPageViewByteSize();
+
+  void setAvgPageViewByteSize(Integer avgPageViewByteSize);
+
   @Description("Average size in bytes for an auction record.")
   @Nullable
   Integer getAvgAuctionByteSize();
@@ -236,12 +242,24 @@ public interface NexmarkOptions
 
   void setHotAuctionRatio(Integer hotAuctionRatio);
 
+  @Description("Ratio of views for 'popular' auctions above the background.")
+  @Nullable
+  Integer getPopularAuctionRatio();
+
+  void setPopularAuctionRatio(Integer popularAuctionRatio);
+  
+  @Description("Ratio of views for active people above the background.")
+  @Nullable
+  Integer getActiveViewersRatio();
+
+  void setActiveViewersRatio(Integer activeViewers);
+  
   @Description("Ratio of auctions for 'hot' sellers above the background.")
   @Nullable
   Integer getHotSellersRatio();
 
   void setHotSellersRatio(Integer hotSellersRatio);
-
+  
   @Description("Ratio of auctions for 'hot' bidders above the background.")
   @Nullable
   Integer getHotBiddersRatio();

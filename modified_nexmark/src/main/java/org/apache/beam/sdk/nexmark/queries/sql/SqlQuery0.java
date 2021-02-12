@@ -47,7 +47,7 @@ import org.apache.beam.sdk.values.Row;
  * <p>This measures the overhead of the Beam SQL implementation and test harness like conversion
  * from Java model classes to Beam records.
  *
- * <p>{@link Bid} events are used here at the moment, ås they are most numerous with default
+ * <p>{@link Bid} events are used here at the moment, as they are most numerous with default
  * configuration.
  */
 @SuppressWarnings({

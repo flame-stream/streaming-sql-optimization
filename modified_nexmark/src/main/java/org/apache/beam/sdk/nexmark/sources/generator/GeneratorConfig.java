@@ -35,14 +35,17 @@ public class GeneratorConfig implements Serializable {
 
   public static final long FIRST_PERSON_ID = 1000L;
   public static final long FIRST_CATEGORY_ID = 10L;
+  public static final long FIRST_PAGEVIEW_ID = 1000L;
 
   /** Proportions of people/auctions/bids to synthesize. */
   public static final int PERSON_PROPORTION = 1;
 
   public static final int AUCTION_PROPORTION = 3;
-  private static final int BID_PROPORTION = 46;
+  public static final int BID_PROPORTION = 26;
+  public static final int PAGEVIEW_PROPORTION = 20;
+  
   public static final int PROPORTION_DENOMINATOR =
-      PERSON_PROPORTION + AUCTION_PROPORTION + BID_PROPORTION;
+      PERSON_PROPORTION + AUCTION_PROPORTION + BID_PROPORTION + PAGEVIEW_PROPORTION;
 
   /** Environment options. */
   private final NexmarkConfiguration configuration;
@@ -170,9 +173,10 @@ public class GeneratorConfig implements Serializable {
         (numEvents * GeneratorConfig.PERSON_PROPORTION) / GeneratorConfig.PROPORTION_DENOMINATOR;
     long numAuctions = (numEvents * AUCTION_PROPORTION) / PROPORTION_DENOMINATOR;
     long numBids = (numEvents * BID_PROPORTION) / PROPORTION_DENOMINATOR;
+    long numPageViews = (numEvents * PAGEVIEW_PROPORTION)/PROPORTION_DENOMINATOR;
     return numPersons * configuration.avgPersonByteSize
         + numAuctions * configuration.avgAuctionByteSize
-        + numBids * configuration.avgBidByteSize;
+        + numBids * configuration.avgBidByteSize + numPageViews * configuration.avgPageViewByteSize;
   }
 
   public int getAvgPersonByteSize() {
@@ -213,6 +217,18 @@ public class GeneratorConfig implements Serializable {
 
   public long getOccasionalDelaySec() {
     return configuration.occasionalDelaySec;
+  }
+  
+  public int getAvgPageViewByteSize() {
+	  return configuration.avgPageViewByteSize;
+  }
+  
+  public int getPopularActionRatio() {
+	  return configuration.popularAuctionRatio;
+  }
+  
+  public int getActiveViewersRatio() {
+	  return configuration.activeViewersRatio;
   }
 
   /** Return an estimate of the byte-size of all events a generator for this config would yield. */

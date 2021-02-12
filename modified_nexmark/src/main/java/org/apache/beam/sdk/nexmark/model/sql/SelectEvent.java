@@ -45,6 +45,8 @@ public class SelectEvent extends PTransform<PCollection<Event>, PCollection<Row>
         return schema.indexOf("newAuction");
       case BID:
         return schema.indexOf("bid");
+      case PAGE_VIEW:
+          return schema.indexOf("pageView");
       default:
         throw new RuntimeException("Unexpected event type.");
     }

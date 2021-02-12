@@ -87,7 +87,7 @@ public class PersonGenerator {
     long epoch = eventId / GeneratorConfig.PROPORTION_DENOMINATOR;
     long offset = eventId % GeneratorConfig.PROPORTION_DENOMINATOR;
     if (offset >= GeneratorConfig.PERSON_PROPORTION) {
-      // About to generate an auction or bid.
+      // About to generate an auction or bid or pageView.
       // Go back to the last person generated in this epoch.
       offset = GeneratorConfig.PERSON_PROPORTION - 1;
     }

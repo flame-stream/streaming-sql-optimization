@@ -95,14 +95,14 @@ public class AuctionGenerator {
       // Go back to the last auction in the last epoch.
       epoch--;
       offset = GeneratorConfig.AUCTION_PROPORTION - 1;
-    } else if (offset >= GeneratorConfig.PERSON_PROPORTION + GeneratorConfig.AUCTION_PROPORTION) {
-      // About to generate a bid.
+    } else if (offset >= GeneratorConfig.PERSON_PROPORTION && offset < GeneratorConfig.PERSON_PROPORTION + GeneratorConfig.AUCTION_PROPORTION) {
+        // About to generate an auction.
+        offset -= GeneratorConfig.PERSON_PROPORTION;
+    }else {
+      // About to generate a bid or pageView.
       // Go back to the last auction generated in this epoch.
       offset = GeneratorConfig.AUCTION_PROPORTION - 1;
-    } else {
-      // About to generate an auction.
-      offset -= GeneratorConfig.PERSON_PROPORTION;
-    }
+    } 
     return epoch * GeneratorConfig.AUCTION_PROPORTION + offset;
   }
 

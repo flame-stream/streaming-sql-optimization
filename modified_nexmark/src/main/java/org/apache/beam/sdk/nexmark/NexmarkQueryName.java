@@ -46,7 +46,8 @@ public enum NexmarkQueryName {
 
   // Other non-numbered queries
   BOUNDED_SIDE_INPUT_JOIN(13),
-  SESSION_SIDE_INPUT_JOIN(14);
+  SESSION_SIDE_INPUT_JOIN(14),
+  RECOMMENDED_ACTIONS(15);
 
   private @Nullable Integer number;
 

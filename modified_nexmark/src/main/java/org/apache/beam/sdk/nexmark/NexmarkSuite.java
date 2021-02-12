@@ -100,6 +100,7 @@ public enum NexmarkSuite {
     configuration.numEvents = 0; // as many as possible without overflow.
     configuration.avgPersonByteSize = 500;
     configuration.avgAuctionByteSize = 500;
+    configuration.avgPageViewByteSize = 500;
     configuration.avgBidByteSize = 500;
     configuration.windowSizeSec = 30;
     configuration.occasionalDelaySec = 360;
@@ -123,6 +124,7 @@ public enum NexmarkSuite {
     configuration.sourceType = NexmarkUtils.SourceType.PUBSUB;
     configuration.numEvents = 0; // as many as possible without overflow.
     configuration.avgPersonByteSize = 500;
+    configuration.avgPageViewByteSize = 500;
     configuration.avgAuctionByteSize = 500;
     configuration.avgBidByteSize = 500;
     configuration.windowSizeSec = 300;

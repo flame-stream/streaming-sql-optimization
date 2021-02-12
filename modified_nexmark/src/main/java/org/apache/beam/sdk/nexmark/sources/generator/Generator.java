@@ -19,6 +19,7 @@ package org.apache.beam.sdk.nexmark.sources.generator;
 
 import static org.apache.beam.sdk.nexmark.sources.generator.model.AuctionGenerator.nextAuction;
 import static org.apache.beam.sdk.nexmark.sources.generator.model.BidGenerator.nextBid;
+import static org.apache.beam.sdk.nexmark.sources.generator.model.PageViewGenerator.nextPageView;
 import static org.apache.beam.sdk.nexmark.sources.generator.model.PersonGenerator.nextPerson;
 import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkNotNull;
 
@@ -229,8 +230,10 @@ public class Generator implements Iterator<TimestampedValue<Event>>, Serializabl
       event =
           new Event(
               nextAuction(eventsCountSoFar, newEventId, random, adjustedEventTimestamp, config));
-    } else {
+    } else if (rem < GeneratorConfig.PERSON_PROPORTION + GeneratorConfig.AUCTION_PROPORTION + GeneratorConfig.BID_PROPORTION){
       event = new Event(nextBid(newEventId, random, adjustedEventTimestamp, config));
+    }else {
+      event = new Event(nextPageView(newEventId, random, adjustedEventTimestamp, config));
     }
 
     eventsCountSoFar++;
