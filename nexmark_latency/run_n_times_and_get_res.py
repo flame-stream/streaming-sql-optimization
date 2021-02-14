@@ -6,9 +6,8 @@ from statistics import mean
 from datetime import datetime
 
 queries = {1: "16", 2: "17"}
-win_sizes = [15, 20, 25]
-all_win_sizes = [2, 5, 10, 15, 20, 25]
-runs_count = 10
+win_sizes = [2, 5, 10, 15, 20, 25]  # windows sizes to run
+runs_count = 10  # runs count per (window_size, query)
 
 code_template = './gradlew -Dorg.gradle.java.home=/Library/Java/JavaVirtualMachines/jdk-11.0.2.jdk/Contents/Home' \
        '    :run -Pnexmark.runner=":runners:flink:1.09" -Pnexmark.args="' \
