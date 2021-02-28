@@ -37,11 +37,11 @@ public class GeneratorConfig implements Serializable {
   public static final long FIRST_CATEGORY_ID = 10L;
 
   /** Proportions of people/auctions/bids to synthesize. */
-  public static final int PERSON_PROPORTION = 5;
+  public static int PERSON_PROPORTION = 5;
 
-  public static final int AUCTION_PROPORTION = 5;
-  private static final int BID_PROPORTION = 90;
-  public static final int PROPORTION_DENOMINATOR =
+  public static int AUCTION_PROPORTION = 5;
+  private static int BID_PROPORTION = 90;
+  public static int PROPORTION_DENOMINATOR =
       PERSON_PROPORTION + AUCTION_PROPORTION + BID_PROPORTION;
 
   /** Environment options. */
@@ -92,6 +92,13 @@ public class GeneratorConfig implements Serializable {
       long firstEventId,
       long maxEventsOrZero,
       long firstEventNumber) {
+
+    PERSON_PROPORTION = configuration.PERSON_PROPORTION;
+    AUCTION_PROPORTION = configuration.AUCTION_PROPORTION;
+    BID_PROPORTION = configuration.BID_PROPORTION;
+    PROPORTION_DENOMINATOR =
+            PERSON_PROPORTION + AUCTION_PROPORTION + BID_PROPORTION;
+
     this.configuration = configuration;
     this.interEventDelayUs =
         configuration.rateShape.interEventDelayUs(
@@ -104,7 +111,7 @@ public class GeneratorConfig implements Serializable {
       // Scale maximum down to avoid overflow in getEstimatedSizeBytes.
       this.maxEvents =
           Long.MAX_VALUE
-              / (PROPORTION_DENOMINATOR
+              / ((long) PROPORTION_DENOMINATOR
                   * Math.max(
                       Math.max(configuration.avgPersonByteSize, configuration.avgAuctionByteSize),
                       configuration.avgBidByteSize));

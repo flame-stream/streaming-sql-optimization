@@ -522,4 +522,22 @@ public interface NexmarkOptions
   String getLatencyLogDirectory();
 
   void setLatencyLogDirectory(String value);
+
+  @Description("Person proportion(from generator config)")
+  @Nullable
+  Integer getPersonProportion();
+
+  void setPersonProportion(Integer value);
+
+  @Description("Auction proportion(from generator config)")
+  @Nullable
+  Integer getAuctionProportion();
+
+  void setAuctionProportion(Integer value);
+
+  @Description("Bid proportion(from generator config)")
+  @Nullable
+  Integer getBidProportion();
+
+  void setBidProportion(Integer value);
 }
