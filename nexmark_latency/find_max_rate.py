@@ -5,9 +5,17 @@ from os.path import join, isfile
 from statistics import mean
 from datetime import datetime
 
+'''
+how to run: python3 find_max_rate.py 2>/dev/null
+'''
+
 queries = {1: "16", 2: "17"}
 win_sizes = [2, 5, 10, 15, 20, 25]  # windows sizes to run
-runs_count = 10  # runs count per (window_size, query)
+rate_min = 9000
+rate_max = 20000
+rate_step = 500
+rate_delta = 1000
+num_events = 1_000_000
 
 code_template = './gradlew -Dorg.gradle.java.home=/Library/Java/JavaVirtualMachines/jdk-11.0.2.jdk/Contents/Home' \
        '    :run -Pnexmark.runner=":runners:flink:1.09" -Pnexmark.args="' \
@@ -21,17 +29,21 @@ code_template = './gradlew -Dorg.gradle.java.home=/Library/Java/JavaVirtualMachi
        '        --latencyLogDirectory=./log/log ' \
        '        --parallelism=1 ' \
        '        --maxParallelism=1 ' \
-       '        --windowSizeSec={}"'
+       '        --windowSizeSec={} ' \
+       '        --numEvents={} ' \
+       '        --firstEventRate={} ' \
+       '        --nextEventRate={} "'
 
 
-def run(window_size, query):
+def run(window_size, query, num_events, rate):
     query_num = queries[query]
-    code = code_template.format(query_num, window_size)
+    code = code_template.format(query_num, window_size, num_events, rate, rate)
     stream = os.popen(code)
     output = stream.read()
-    # time = parse_output(output)
+    max_rate = parse_output(output)
+    print(max_rate)
     latency = get_result()
-    return latency
+    return latency, max_rate
 
 
 def get_result():
@@ -57,39 +69,33 @@ def get_result():
 def parse_output(output):
     split = output.split()
     baseline_index = split.index("(Baseline)")
-    print(split)
-    return float(split[baseline_index + 6])
+    return float(split[baseline_index + 7])
 
 
-def run_n_times(window_size, n, query):
-    mean_latency_list = []
-    for i in range(n):
-        print(f"RUN № {i}")
-        latency = run(window_size, query)
-        print(f"  {latency}")
-        mean_latency_list.append(latency)
-    return mean_latency_list, mean(mean_latency_list)
+def calc_max_rate(window_size, query):
+    curr_rate = rate_min
+    while curr_rate <= rate_max:
+        print(f"RUN with rate = {curr_rate}")
+        latency, rate = run(window_size, query, num_events, curr_rate)
+        if rate + rate_delta < curr_rate:
+            print(f"ans is {rate}")
+            break
+        curr_rate += rate_step
+    return rate
 
 
 if __name__ == "__main__":
     with open("results.txt", "a") as f:
         f.write(str(datetime.now()) + "\n")
         for win_size in win_sizes:
-            f.write(f"WIN_SIZE: {win_size} \n")
             print(f"WIN_SIZE: {win_size}")
 
-            f.write("QUERY_1: \n")
             print("QUERY_1:")
-            latency_list, mean_latency = run_n_times(win_size, runs_count, 1)
-            for elem in latency_list:
-                f.write(str(elem) + "\n")
-            f.write(str(mean_latency) + "\n")
+            max_rate = calc_max_rate(win_size, 1)
+            print(max_rate)
 
-            f.write("QUERY_2: \n")
             print("QUERY_2:")
-            latency_list, mean_latency = run_n_times(win_size, runs_count, 2)
-            for elem in latency_list:
-                f.write(str(elem) + "\n")
-            f.write(str(mean_latency) + "\n")
+            max_rate = calc_max_rate(win_size, 2)
+            print(max_rate)
 
             print("FINISHED")

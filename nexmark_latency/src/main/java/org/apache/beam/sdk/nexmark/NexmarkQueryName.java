@@ -52,7 +52,7 @@ public enum NexmarkQueryName {
   LATENCY_SQL_QUERY_1(16),
   LATENCY_SQL_QUERY_2(17),
   TEST_SQL_QUERY_TIMES(18),
-  TEST_SQL_QUERY_TIMES_AND_RES(18);
+  TEST_SQL_QUERY_TIMES_AND_RES(19);
 
   private @Nullable Integer number;
 

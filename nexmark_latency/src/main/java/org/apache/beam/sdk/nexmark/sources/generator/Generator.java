@@ -226,16 +226,16 @@ public class Generator implements Iterator<TimestampedValue<Event>>, Serializabl
 
     Event event;
     if (rem < GeneratorConfig.PERSON_PROPORTION) {
-      System.out.println("generated [PERSON ] " + new DateTime(adjustedEventTimestamp));
+//      System.out.println("generated [PERSON ] " + new DateTime(adjustedEventTimestamp));
       event =
           new Event(nextPerson(newEventId, random, new DateTime(adjustedEventTimestamp), config));
     } else if (rem < GeneratorConfig.PERSON_PROPORTION + GeneratorConfig.AUCTION_PROPORTION) {
-      System.out.println("generated [AUCTION] " + new DateTime(adjustedEventTimestamp));
+//      System.out.println("generated [AUCTION] " + new DateTime(adjustedEventTimestamp));
       event =
           new Event(
               nextAuction(eventsCountSoFar, newEventId, random, adjustedEventTimestamp, config));
     } else {
-      System.out.println("generated [Bid    ]  " + new DateTime(adjustedEventTimestamp));
+//      System.out.println("generated [Bid    ]  " + new DateTime(adjustedEventTimestamp));
       event = new Event(nextBid(newEventId, random, adjustedEventTimestamp, config));
     }
 
