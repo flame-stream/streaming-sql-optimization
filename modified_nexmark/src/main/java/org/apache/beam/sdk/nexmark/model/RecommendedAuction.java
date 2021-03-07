@@ -12,11 +12,14 @@ import org.apache.beam.sdk.coders.CustomCoder;
 import org.apache.beam.sdk.coders.StringUtf8Coder;
 import org.apache.beam.sdk.coders.VarLongCoder;
 import org.apache.beam.sdk.nexmark.NexmarkUtils;
+import org.apache.beam.sdk.schemas.JavaFieldSchema;
+import org.apache.beam.sdk.schemas.annotations.DefaultSchema;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.core.JsonProcessingException;
 
 /** Result of Query15. */
+@DefaultSchema(JavaFieldSchema.class)
 @SuppressWarnings({ "nullness" // TODO(https://issues.apache.org/jira/browse/BEAM-10402)
 })
 public class RecommendedAuction implements KnownSize, Serializable {
@@ -27,10 +30,10 @@ public class RecommendedAuction implements KnownSize, Serializable {
 	public static final Coder<RecommendedAuction> CODER = new CustomCoder<RecommendedAuction>() {
 		@Override
 		public void encode(RecommendedAuction value, OutputStream outStream) throws CoderException, IOException {
-			LONG_CODER.encode(value.personId, outStream);
-			STRING_CODER.encode(value.personEmail, outStream);
+			LONG_CODER.encode(value.id, outStream);
+			STRING_CODER.encode(value.emailAddress, outStream);
 			LONG_CODER.encode(value.competitor, outStream);
-			LONG_CODER.encode(value.mainAction, outStream);
+			LONG_CODER.encode(value.auction, outStream);
 			LONG_CODER.encode(value.viewedAction, outStream);
 		}
 
@@ -50,40 +53,40 @@ public class RecommendedAuction implements KnownSize, Serializable {
 		}
 	};
 	@JsonProperty
-	private final long personId;
+	public long id;
 
 	@JsonProperty
-	private final String personEmail;
+	public String emailAddress;
 
 	@JsonProperty
-	private final long competitor;
+	public long competitor;
 
 	@JsonProperty
-	private final long mainAction;
+	public long auction;
 
 	@JsonProperty
-	private final long viewedAction;
+	public long viewedAction;
 
 	public RecommendedAuction(long personId, String personEmail, long competitor, long mainAction, long viewedAction) {
 		super();
-		this.personId = personId;
-		this.personEmail = personEmail;
+		this.id = personId;
+		this.emailAddress = personEmail;
 		this.competitor = competitor;
-		this.mainAction = mainAction;
+		this.auction = mainAction;
 		this.viewedAction = viewedAction;
 	}
 
 	public RecommendedAuction() {
-		personId = 0;
-		personEmail = null;
+		id = 0;
+		emailAddress = null;
 		competitor = 0;
-		mainAction = 0;
+		auction = 0;
 		viewedAction = 0;
 	}
 
 	@Override
 	public int hashCode() {
-		return Objects.hash(personId, personEmail, competitor, mainAction, viewedAction);
+		return Objects.hash(id, emailAddress, competitor, auction, viewedAction);
 	}
 
 	@Override
@@ -97,14 +100,14 @@ public class RecommendedAuction implements KnownSize, Serializable {
 		RecommendedAuction other = (RecommendedAuction) obj;
 		if (competitor != other.competitor)
 			return false;
-		if (mainAction != other.mainAction)
+		if (auction != other.auction)
 			return false;
-		if (personEmail == null) {
-			if (other.personEmail != null)
+		if (emailAddress == null) {
+			if (other.emailAddress != null)
 				return false;
-		} else if (!personEmail.equals(other.personEmail))
+		} else if (!emailAddress.equals(other.emailAddress))
 			return false;
-		if (personId != other.personId)
+		if (id != other.id)
 			return false;
 		if (viewedAction != other.viewedAction)
 			return false;
@@ -122,7 +125,7 @@ public class RecommendedAuction implements KnownSize, Serializable {
 
 	@Override
 	public long sizeInBytes() {
-		return 8L + personEmail.length() + 1L + 8L + 8L + 8L;
+		return 8L + emailAddress.length() + 1L + 8L + 8L + 8L;
 
 	}
 

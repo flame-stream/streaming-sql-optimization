@@ -111,7 +111,7 @@ public class NexmarkConfiguration implements Serializable {
 	 * overflowing internal counters etc.
 	 */
 	@JsonProperty
-	public long numEvents = 1000000; // DEFAULT 1000000
+	public long numEvents = 10000; // DEFAULT 1000000
 
 	/**
 	 * Number of event generators to use. Each generates events in its own timeline.
@@ -125,11 +125,11 @@ public class NexmarkConfiguration implements Serializable {
 
 	/** Initial overall event rate (in {@link #rateUnit}). */
 	@JsonProperty
-	public int firstEventRate = 50000; // DEFAULT 10000
+	public int firstEventRate = 1000; // DEFAULT 10000
 
 	/** Next overall event rate (in {@link #rateUnit}). */
 	@JsonProperty
-	public int nextEventRate = 50000; // DEFAULT 10000
+	public int nextEventRate = 1000; // DEFAULT 10000
 
 	/** Unit for rates. */
 	@JsonProperty

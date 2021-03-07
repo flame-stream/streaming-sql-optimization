@@ -84,6 +84,7 @@ import org.apache.beam.sdk.nexmark.queries.SessionSideInputJoinModel;
 import org.apache.beam.sdk.nexmark.queries.sql.SqlBoundedSideInputJoin;
 import org.apache.beam.sdk.nexmark.queries.sql.SqlQuery0;
 import org.apache.beam.sdk.nexmark.queries.sql.SqlQuery1;
+import org.apache.beam.sdk.nexmark.queries.sql.SqlQuery15;
 import org.apache.beam.sdk.nexmark.queries.sql.SqlQuery2;
 import org.apache.beam.sdk.nexmark.queries.sql.SqlQuery3;
 import org.apache.beam.sdk.nexmark.queries.sql.SqlQuery7;
@@ -1204,7 +1205,7 @@ public class NexmarkLauncher<OptionT extends NexmarkOptions> {
 				.put(NexmarkQueryName.WINNING_BIDS, new Query9Model(configuration))
 				.put(NexmarkQueryName.BOUNDED_SIDE_INPUT_JOIN, new BoundedSideInputJoinModel(configuration))
 				.put(NexmarkQueryName.SESSION_SIDE_INPUT_JOIN, new SessionSideInputJoinModel(configuration))
-				.put(NexmarkQueryName.RECOMMENDED_ACTIONS, new Query15Model(configuration)).build();
+				.put(NexmarkQueryName.RECOMMENDED_AUCTIONS, new Query15Model(configuration)).build();
 	}
 
 	private Map<NexmarkQueryName, NexmarkQuery> createQueries() {
@@ -1256,6 +1257,8 @@ public class NexmarkLauncher<OptionT extends NexmarkOptions> {
 				.put(NexmarkQueryName.HIGHEST_BID, new NexmarkQuery(configuration, new SqlQuery7(configuration)))
 				.put(NexmarkQueryName.BOUNDED_SIDE_INPUT_JOIN, new NexmarkQuery(configuration,
 						SqlBoundedSideInputJoin.calciteSqlBoundedSideInputJoin(configuration)))
+				.put(NexmarkQueryName.RECOMMENDED_AUCTIONS,
+						new NexmarkQuery(configuration, SqlQuery15.calciteSqlQuery15(configuration)))
 				.build();
 	}
 
@@ -1293,7 +1296,7 @@ public class NexmarkLauncher<OptionT extends NexmarkOptions> {
 						new NexmarkQuery(configuration, new BoundedSideInputJoin(configuration)))
 				.put(NexmarkQueryName.SESSION_SIDE_INPUT_JOIN,
 						new NexmarkQuery(configuration, new SessionSideInputJoin(configuration)))
-				.put(NexmarkQueryName.RECOMMENDED_ACTIONS,
+				.put(NexmarkQueryName.RECOMMENDED_AUCTIONS,
 						new NexmarkQuery(configuration, new Query15(configuration)))
 
 				.build();
