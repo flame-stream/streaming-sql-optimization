@@ -26,14 +26,16 @@ import org.joda.time.Duration;
 
 public class SqlQuery15 extends NexmarkQueryTransform<RecommendedAuction> {
 
-	private static final String QUERY = "with viewed_auctions (viewedAction, viewer) as \n"
-			+ "(select  a.id, v.viewer from Auction a inner join PageView v on v.auction=a.id), \n" + "\n"
-			+ "bidder_group(main, competitor, auction) as \n"
-			+ "(select b1.bidder, b2.bidder, b1.auction from Bid as b1\n"
+
+
+	private static final String QUERY = "with viewed_auctions as \n"
+			+ "(select  a.id as viewedAction, v.viewer as viewer from Auction a inner join PageView v on v.auction=a.id), \n" + "\n"
+			+ "bidder_group  as \n"
+			+ "(select b1.bidder as main, b2.bidder as competitor, b1.auction as auction from Bid as b1\n"
 			+ "inner join Bid as b2 on b1.auction = b2.auction)\n" + "\n"
-			+ "select p.id, p.emailAddress, b.competitor, b.auction, va.viewedAction \n"
+			+ "select distinct p.id, p.emailAddress, b.competitor, b.auction, va.viewedAction \n"
 			+ "from bidder_group b inner join viewed_auctions va on b.competitor=va.viewer  \n"
-			+ "inner join Person p on p.id = b.main";
+			+ "inner join Person p on p.id = b.main ";
 
 	private final NexmarkConfiguration configuration;
 	private final Class<? extends QueryPlanner> plannerClass;
