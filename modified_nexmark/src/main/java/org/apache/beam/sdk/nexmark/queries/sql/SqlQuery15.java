@@ -28,16 +28,17 @@ public class SqlQuery15 extends NexmarkQueryTransform<RecommendedAuction> {
 
 
 
-	private static final String QUERY = "with viewed_auctions as "
-		+ "          (select  a.id as viewedAction, v.viewer as id, p.emailAddress as emailAddress from Auction a inner join PageView v on v.auction=a.id inner join Person p on p.id = v.viewer),"
-		+ "          bidder_group  as "
-		+ "          (select b1.bidder as main, b2.bidder as competitor, b1.auction as auction from Bid as b1 "
-		+ "          inner join Bid as b2 on b1.auction = b2.auction except select b1.bidder as main, b2.bidder as competitor, b1.auction as auction from Bid as b1"
-		+ "          inner join Bid as b2 on b1.auction = b2.auction and b1.bidder=b2.bidder)"
-		+ "          select va.id, va.emailAddress, b.competitor, b.auction, va.viewedAction"
-		+ "          from bidder_group b inner join viewed_auctions va on b.competitor=va.id "
-		+ "          except select va.id, va.emailAddress, b.competitor, b.auction, va.viewedAction"
-		+ "		     from bidder_group b inner join viewed_auctions va on b.competitor=va.id and va.viewedAction=b.auction";
+	private static final String QUERY = "    with bidder_group  as \n"
+		+ "        (select b1.bidder as main, b2.bidder as competitor, b1.auction as auction from Bid as b1 \n"
+		+ "     		  inner join Bid as b2 on b1.auction = b2.auction except \n"
+		+ "     	select b1.bidder as main, b2.bidder as competitor, b1.auction as auction from Bid as b1 \n"
+		+ "     		  inner join Bid as b2 on b1.auction = b2.auction and b1.bidder=b2.bidder 	  \n"
+		+ "     		   )\n"
+		+ "     	  select p.id, p.emailAddress, b.competitor, b.auction, pv.auction as viewedAction\n"
+		+ "     	      from bidder_group b inner join PageView pv on b.competitor=pv.viewer  inner join Person p on p.id = b.main except \n"
+		+ "    	  select p.id, p.emailAddress, b.competitor, b.auction, pv.auction as viewedAction\n"
+		+ "     	      from bidder_group b inner join PageView pv on b.competitor=pv.viewer inner join Person p on p.id = b.main and pv.auction=b.auction \n"
+		+ "";
 
 	private final NexmarkConfiguration configuration;
 	private final Class<? extends QueryPlanner> plannerClass;
