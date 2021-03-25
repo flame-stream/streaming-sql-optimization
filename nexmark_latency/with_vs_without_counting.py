@@ -6,9 +6,8 @@ from statistics import mean
 from datetime import datetime
 
 queries = {1: "16", 2: "17"}
-win_sizes = [1]
-# win_sizes = [2, 5, 10, 15, 20, 25]  # windows sizes to run
-runs_count = 10  # runs count per (window_size, query)
+win_size = 10
+runs_count = 10
 
 personProportion = 5
 auctionProportion = 90
@@ -29,17 +28,24 @@ code_template = './gradlew -Dorg.gradle.java.home=/Library/Java/JavaVirtualMachi
         '        --windowSizeSec={}' \
         '        --personProportion={} ' \
         '        --auctionProportion={} ' \
-        '        --bidProportion={}"'
+        '        --bidProportion={}'
+
+code_template_with_count = code_template + '  --counting"'
 
 
-def run(window_size, query):
+def run(window_size, query, counting):
     query_num = queries[query]
-    code = code_template.format(query_num, window_size,
+    if counting:
+        template = code_template_with_count
+    else:
+        template = code_template + '"'
+    code = template.format(query_num, window_size,
         personProportion, auctionProportion, bidProportion)
     stream = os.popen(code)
     output = stream.read()
-    # time = parse_output(output)
+    # time = pvarse_output(output)
     latency = get_result()
+    print(latency)
     return latency
 
 
@@ -70,11 +76,11 @@ def parse_output(output):
     return float(split[baseline_index + 6])
 
 
-def run_n_times(window_size, n, query):
+def run_n_times(window_size, n, query, counting):
     mean_latency_list = []
     for i in range(n):
         print(f"RUN № {i}")
-        latency = run(window_size, query)
+        latency = run(window_size, query, counting)
         print(f"  {latency}")
         mean_latency_list.append(latency)
     return mean_latency_list, mean(mean_latency_list)
@@ -82,23 +88,22 @@ def run_n_times(window_size, n, query):
 
 if __name__ == "__main__":
     with open("results.txt", "a") as f:
-        f.write(str(datetime.now()) + "\n")
-        for win_size in win_sizes:
-            f.write(f"WIN_SIZE: {win_size} \n")
-            print(f"WIN_SIZE: {win_size}")
+        f.write(str(datetime.now()) + " WITH_VS_WITHOUT_COUNTING" + "\n")
+        f.write(f"WIN_SIZE = : {win_size} \n")
+        print(f"WIN_SIZE = {win_size}")
 
-            f.write("QUERY_1: \n")
-            print("QUERY_1:")
-            latency_list, mean_latency = run_n_times(win_size, runs_count, 1)
-            for elem in latency_list:
-                f.write(str(elem) + "\n")
-            f.write(str(mean_latency) + "\n")
+        f.write("QUERY_1 WITH COUNTING:\n")
+        print("QUERY_1 WITH COUNTING:")
+        latency_list, mean_latency = run_n_times(win_size, runs_count, 1, True)
+        for elem in latency_list:
+            f.write(str(elem) + "\n")
+        f.write("MEAN LATENCY = " + str(mean_latency) + "\n")
 
-            f.write("QUERY_2: \n")
-            print("QUERY_2:")
-            latency_list, mean_latency = run_n_times(win_size, runs_count, 2)
-            for elem in latency_list:
-                f.write(str(elem) + "\n")
-            f.write(str(mean_latency) + "\n")
+        f.write("QUERY_1 WITHOUT COUNTING: \n")
+        print("QUERY_1 WITHOUT COUNTING:")
+        latency_list, mean_latency = run_n_times(win_size, runs_count, 1, False)
+        for elem in latency_list:
+            f.write(str(elem) + "\n")
+        f.write("MEAN LATENCY = " + str(mean_latency) + "\n")
 
-            print("FINISHED")
+        print("FINISHED")

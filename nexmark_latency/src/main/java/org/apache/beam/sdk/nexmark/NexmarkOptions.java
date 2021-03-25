@@ -524,20 +524,30 @@ public interface NexmarkOptions
   void setLatencyLogDirectory(String value);
 
   @Description("Person proportion(from generator config)")
+  @Default.Integer(5)
   @Nullable
   Integer getPersonProportion();
 
   void setPersonProportion(Integer value);
 
   @Description("Auction proportion(from generator config)")
+  @Default.Integer(5)
   @Nullable
   Integer getAuctionProportion();
 
   void setAuctionProportion(Integer value);
 
   @Description("Bid proportion(from generator config)")
+  @Default.Integer(90)
   @Nullable
   Integer getBidProportion();
 
   void setBidProportion(Integer value);
+
+  @Description("if false, do not count persons, auctions, bids per window")
+  @Default.Boolean(false)
+  @Nullable
+  Boolean getCounting();
+
+  void setCounting(Boolean value);
 }

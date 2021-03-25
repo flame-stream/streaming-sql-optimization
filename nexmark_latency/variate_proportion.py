@@ -14,10 +14,11 @@ win_sizes = [10]  # windows sizes to run
 rate = 10000
 num_events = 1_000_000
 
-runs_count = 5
+runs_count = 10
 
 summary_proportion = 100
 const_person_proportion = 5
+
 auction_proportions = [5 * i for i in range(1, 19)]
 
 code_template = './gradlew -Dorg.gradle.java.home=/Library/Java/JavaVirtualMachines/jdk-11.0.2.jdk/Contents/Home' \
@@ -107,7 +108,8 @@ if __name__ == "__main__":
                                                          const_person_proportion, auction_proportion, bid_proportion)
                 for elem in latency_list:
                     f.write(str(elem) + "\n")
-                f.write(str(mean_latency) + "\n")
+                f.write("mean: " + str(mean_latency) + "\n")
+                print("mean: " + str(mean_latency) + "\n")
 
                 f.write("QUERY_2: \n")
                 print("QUERY_2:")
@@ -115,6 +117,7 @@ if __name__ == "__main__":
                                                          const_person_proportion, auction_proportion, bid_proportion)
                 for elem in latency_list:
                     f.write(str(elem) + "\n")
-                f.write(str(mean_latency) + "\n")
+                print("mean: " + str(mean_latency) + "\n")
+                f.write("mean: " + str(mean_latency) + "\n")
 
                 print("FINISHED")

@@ -20,14 +20,12 @@ package org.apache.beam.sdk.nexmark.queries.sql;
 import org.apache.beam.sdk.extensions.sql.impl.CalciteQueryPlanner;
 import org.apache.beam.sdk.io.TextIO;
 import org.apache.beam.sdk.nexmark.NexmarkConfiguration;
+import org.apache.beam.sdk.nexmark.counting.SqlCounter;
 import org.apache.beam.sdk.nexmark.latency.AddArrivalTime;
 import org.apache.beam.sdk.nexmark.latency.AddReceiveTime;
 import org.apache.beam.sdk.nexmark.latency.NexmarkSqlTransform;
-import org.apache.beam.sdk.nexmark.model.Auction;
-import org.apache.beam.sdk.nexmark.model.Event;
+import org.apache.beam.sdk.nexmark.model.*;
 import org.apache.beam.sdk.nexmark.model.Event.Type;
-import org.apache.beam.sdk.nexmark.model.NameCityStatePriceReceiveArrivalTimes;
-import org.apache.beam.sdk.nexmark.model.Person;
 import org.apache.beam.sdk.nexmark.model.sql.SelectEvent;
 import org.apache.beam.sdk.nexmark.queries.NexmarkQueryTransform;
 import org.apache.beam.sdk.schemas.Schema;
@@ -48,17 +46,12 @@ import org.joda.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class SqlQuery19 extends NexmarkQueryTransform<NameCityStatePriceReceiveArrivalTimes> {
+import static org.apache.beam.sdk.nexmark.counting.SqlCounter.auction_count_query;
+import static org.apache.beam.sdk.nexmark.counting.SqlCounter.bid_count_query;
+
+public class SqlQuery19 extends NexmarkQueryTransform<ReceiveArrivalTimes> {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(SqlQuery19.class);
-
-//    private static final String QUERY =
-//        ""
-//          + " SELECT "
-//          + "    B.receiveTime AS timestamp1, A.receiveTime AS timestamp2, P.receiveTime AS timestamp3"
-//          + " FROM "
-//          + "    Auction A INNER JOIN Person P on A.seller = P.id "
-//          + "       INNER JOIN Bid B on B.bidder = P.id";
 
     private static final String QUERY =
             ""
@@ -76,7 +69,32 @@ public class SqlQuery19 extends NexmarkQueryTransform<NameCityStatePriceReceiveA
                     + " FROM "
                     + "    Bid B";
 
+    private static final String QUERY_COUNT_PERSON =
+            ""
+                    + " SELECT "
+                    + "    COUNT(*)"
+                    + " FROM "
+                    + "    Person";
+
+    private static final String QUERY_COUNT_AUCTION =
+            ""
+                    + " SELECT "
+                    + "    COUNT(*)"
+                    + " FROM "
+                    + "    Auction";
+
+    private static final String QUERY_COUNT_BID =
+            ""
+                    + " SELECT "
+                    + "    COUNT(*)"
+                    + " FROM "
+                    + "    Bid B";
+
     private final NexmarkSqlTransform query;
+
+//    private final NexmarkSqlTransform person_count_query;
+//    private final NexmarkSqlTransform auction_count_query;
+//    private final NexmarkSqlTransform bid_count_query;
 
     private final NexmarkConfiguration configuration;
 
@@ -84,11 +102,14 @@ public class SqlQuery19 extends NexmarkQueryTransform<NameCityStatePriceReceiveA
         super("SqlQuery19");
 
         this.configuration = configuration;
-        query = NexmarkSqlTransform.query(QUERY).withQueryPlannerClass(CalciteQueryPlanner.class);
+        query = NexmarkSqlTransform.query(SIMPLE_QUERY).withQueryPlannerClass(CalciteQueryPlanner.class);
+//        person_count_query = NexmarkSqlTransform.query(QUERY_COUNT_PERSON).withQueryPlannerClass(CalciteQueryPlanner.class);
+//        auction_count_query = NexmarkSqlTransform.query(QUERY_COUNT_AUCTION).withQueryPlannerClass(CalciteQueryPlanner.class);
+//        bid_count_query = NexmarkSqlTransform.query(QUERY_COUNT_BID).withQueryPlannerClass(CalciteQueryPlanner.class);
     }
 
     @Override
-    public PCollection<NameCityStatePriceReceiveArrivalTimes> expand(PCollection<Event> allEvents) {
+    public PCollection<ReceiveArrivalTimes> expand(PCollection<Event> allEvents) {
         PCollection<Event> windowed =
                 allEvents.apply(
                         Window.into(FixedWindows.of(Duration.standardSeconds(configuration.windowSizeSec))));
@@ -138,10 +159,14 @@ public class SqlQuery19 extends NexmarkQueryTransform<NameCityStatePriceReceiveA
         TupleTag<Row> auctionTag = new TupleTag<>("Auction");
         TupleTag<Row> personTag = new TupleTag<>("Person");
 
-        PCollection<Row> results = PCollectionTuple.of(bidTag, bids)
+        PCollectionTuple withTags = PCollectionTuple.of(bidTag, bids)
                 .and(auctionTag, auctions)
-                .and(personTag, people)
+                .and(personTag, people);
+
+        PCollection<Row> results = withTags
                 .apply(query); // <-- for a run with standard rates
+
+        SqlCounter.applyCounting(withTags, configuration);
 
         // adding arrival (from join) time for each tuple to be used for latency calculation
         Schema withArrivalTime = Schema.builder()
@@ -152,36 +177,7 @@ public class SqlQuery19 extends NexmarkQueryTransform<NameCityStatePriceReceiveA
                 .apply(MapElements.via(new AddArrivalTime()))
                 .setRowSchema(withArrivalTime);
 
-        latency.apply(ToString.elements())
-                .apply(TextIO.write().to(configuration.latencyLogDirectory)
-                        .withWindowedWrites()
-                        .withNumShards(1)
-                        .withSuffix(".txt"));
-
-        return latency.apply(Convert.fromRows(NameCityStatePriceReceiveArrivalTimes.class));
-    }
-
-    /**
-     * Utility logging transform. Usage: .apply(ParDo.of(new LoggingDoFn())).
-     */
-    private static class LoggingDoFn extends DoFn<Row, Row> {
-        private String prefix = "";
-
-        public LoggingDoFn() {
-        }
-
-        public LoggingDoFn(String prefix) {
-            this.prefix = prefix;
-        }
-
-        @ProcessElement
-        public void processElement(ProcessContext c, BoundedWindow window, @Timestamp Instant timestamp) {
-            Row row = c.element();
-            /*if (row != null) {
-                // do smth here
-            }*/
-            c.output(row);
-        }
+        return latency.apply(Convert.fromRows(ReceiveArrivalTimes.class));
     }
 }
 

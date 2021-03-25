@@ -30,6 +30,7 @@ import org.apache.beam.sdk.nexmark.model.Latency;
 import org.apache.beam.sdk.nexmark.model.sql.SelectEvent;
 import org.apache.beam.sdk.nexmark.queries.NexmarkQueryTransform;
 import org.apache.beam.sdk.nexmark.queries.NexmarkQueryUtil;
+import org.apache.beam.sdk.nexmark.utils.LoggingDoFn;
 import org.apache.beam.sdk.schemas.Schema;
 import org.apache.beam.sdk.transforms.*;
 import org.apache.beam.sdk.transforms.windowing.BoundedWindow;
@@ -135,28 +136,5 @@ public class SqlQuery15 extends NexmarkQueryTransform<Latency> {
                         .withSuffix(".txt"));
 
         return latency;
-    }
-
-    /**
-     * Utility logging transform. Usage: .apply(ParDo.of(new LoggingDoFn())).
-     */
-    private static class LoggingDoFn extends DoFn<Row, Row> {
-        private String prefix = "";
-
-        public LoggingDoFn() {
-        }
-
-        public LoggingDoFn(String prefix) {
-            this.prefix = prefix;
-        }
-
-        @ProcessElement
-        public void processElement(ProcessContext c, BoundedWindow window, @Timestamp Instant timestamp) {
-            Row row = c.element();
-            /*if (row != null) {
-                // do smth here
-            }*/
-            c.output(row);
-        }
     }
 }

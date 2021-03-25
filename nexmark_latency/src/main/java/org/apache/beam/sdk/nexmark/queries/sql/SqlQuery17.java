@@ -30,26 +30,29 @@ import org.apache.beam.sdk.nexmark.model.sql.SelectEvent;
 import org.apache.beam.sdk.nexmark.queries.NexmarkQueryTransform;
 import org.apache.beam.sdk.schemas.Schema;
 import org.apache.beam.sdk.transforms.*;
-import org.apache.beam.sdk.transforms.windowing.BoundedWindow;
 import org.apache.beam.sdk.transforms.windowing.FixedWindows;
 import org.apache.beam.sdk.transforms.windowing.Window;
 import org.apache.beam.sdk.values.*;
 import org.joda.time.Duration;
-import org.joda.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import static org.apache.beam.sdk.nexmark.counting.SqlCounter.*;
+
+/**
+ * SQL query for second graph. For first graph use SqlQuery16.
+ */
 public class SqlQuery17 extends NexmarkQueryTransform<Latency> {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(SqlQuery17.class);
 
     private static final String QUERY_2 =
             ""
-                    + " SELECT "
-                    + "    B.receiveTime AS timestamp1, A.receiveTime AS timestamp2, P.receiveTime AS timestamp3"
-                    + " FROM "
-                    + "    Person P INNER JOIN Bid B on B.bidder = P.id"
-                    + "           INNER JOIN Auction A on A.seller = P.id";
+                + " SELECT "
+                + "    B.receiveTime AS timestamp1, A.receiveTime AS timestamp2, P.receiveTime AS timestamp3"
+                + " FROM "
+                + "    Person P INNER JOIN Bid B on B.bidder = P.id"
+                + "           INNER JOIN Auction A on A.seller = P.id";
 
     private final NexmarkSqlTransform query;
 
@@ -108,15 +111,19 @@ public class SqlQuery17 extends NexmarkQueryTransform<Latency> {
                 .apply(MapElements.via(new AddReceiveTime()))
                 .setRowSchema(bidsWithReceiveTime);
 
-
         TupleTag<Row> bidTag = new TupleTag<>("Bid");
         TupleTag<Row> auctionTag = new TupleTag<>("Auction");
         TupleTag<Row> personTag = new TupleTag<>("Person");
 
-        PCollection<Row> results = PCollectionTuple.of(bidTag, bids)
+        PCollectionTuple withTags = PCollectionTuple.of(bidTag, bids)
                 .and(auctionTag, auctions)
-                .and(personTag, people)
-                .apply(query); // <-- for a run with standard rates
+                .and(personTag, people);
+
+        if (configuration.counting) {
+            applyCounting(withTags, configuration);
+        }
+
+        PCollection<Row> results = withTags.apply(query);
 
         // adding arrival (from join) time for each tuple to be used for latency calculation
         Schema withArrivalTime = Schema.builder()
@@ -136,29 +143,6 @@ public class SqlQuery17 extends NexmarkQueryTransform<Latency> {
                         .withSuffix(".txt"));
 
         return latency;
-    }
-
-    /**
-     * Utility logging transform. Usage: .apply(ParDo.of(new LoggingDoFn())).
-     */
-    private static class LoggingDoFn extends DoFn<Row, Row> {
-        private String prefix = "";
-
-        public LoggingDoFn() {
-        }
-
-        public LoggingDoFn(String prefix) {
-            this.prefix = prefix;
-        }
-
-        @ProcessElement
-        public void processElement(ProcessContext c, BoundedWindow window, @Timestamp Instant timestamp) {
-            Row row = c.element();
-            /*if (row != null) {
-                // do smth here
-            }*/
-            c.output(row);
-        }
     }
 }
 
