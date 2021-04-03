@@ -1,0 +1,1051 @@
+{
+  "nodes" : [ {
+    "id" : 1,
+    "type" : "Source: Impulse",
+    "pact" : "Data Source",
+    "contents" : "Source: Impulse",
+    "parallelism" : 1
+  }, {
+    "id" : 2,
+    "type" : "SqlQuery16.ReadUnbounded/ParDo(OutputSingleSource)/ParMultiDo(OutputSingleSource)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16.ReadUnbounded/ParDo(OutputSingleSource)/ParMultiDo(OutputSingleSource)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 1,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 3,
+    "type" : "SqlQuery16.ReadUnbounded/ParDo(UnboundedSourceAsSDFWrapper)/ParMultiDo(UnboundedSourceAsSDFWrapper)/Pair with initial restriction/ParMultiDo(PairWithRestriction)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16.ReadUnbounded/ParDo(UnboundedSourceAsSDFWrapper)/ParMultiDo(UnboundedSourceAsSDFWrapper)/Pair with initial restriction/ParMultiDo(PairWithRestriction)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 2,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 4,
+    "type" : "SqlQuery16.ReadUnbounded/ParDo(UnboundedSourceAsSDFWrapper)/ParMultiDo(UnboundedSourceAsSDFWrapper)/Split restriction/ParMultiDo(SplitRestriction)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16.ReadUnbounded/ParDo(UnboundedSourceAsSDFWrapper)/ParMultiDo(UnboundedSourceAsSDFWrapper)/Split restriction/ParMultiDo(SplitRestriction)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 3,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 5,
+    "type" : "SqlQuery16.ReadUnbounded/ParDo(UnboundedSourceAsSDFWrapper)/ParMultiDo(UnboundedSourceAsSDFWrapper)/Explode windows/ParMultiDo(ExplodeWindows)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16.ReadUnbounded/ParDo(UnboundedSourceAsSDFWrapper)/ParMultiDo(UnboundedSourceAsSDFWrapper)/Explode windows/ParMultiDo(ExplodeWindows)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 4,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 6,
+    "type" : "SqlQuery16.ReadUnbounded/ParDo(UnboundedSourceAsSDFWrapper)/ParMultiDo(UnboundedSourceAsSDFWrapper)/Assign unique key/AddKeys/Map/ParMultiDo(Anonymous)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16.ReadUnbounded/ParDo(UnboundedSourceAsSDFWrapper)/ParMultiDo(UnboundedSourceAsSDFWrapper)/Assign unique key/AddKeys/Map/ParMultiDo(Anonymous)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 5,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 7,
+    "type" : "ToKeyedWorkItem",
+    "pact" : "Operator",
+    "contents" : "ToKeyedWorkItem",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 6,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 9,
+    "type" : "SqlQuery16.ReadUnbounded/ParDo(UnboundedSourceAsSDFWrapper)/ParMultiDo(UnboundedSourceAsSDFWrapper)/ProcessKeyedElements/SplittableParDoViaKeyedWorkItems.ProcessElements",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16.ReadUnbounded/ParDo(UnboundedSourceAsSDFWrapper)/ParMultiDo(UnboundedSourceAsSDFWrapper)/ProcessKeyedElements/SplittableParDoViaKeyedWorkItems.ProcessElements",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 7,
+      "ship_strategy" : "HASH",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 10,
+    "type" : "SqlQuery16.ReadUnbounded/ParDo(StripIds)/ParMultiDo(StripIds)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16.ReadUnbounded/ParDo(StripIds)/ParMultiDo(StripIds)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 9,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 11,
+    "type" : "SqlQuery16/SqlQuery16.Monitor/ParMultiDo(Monitor)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16.Monitor/ParMultiDo(Monitor)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 10,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 12,
+    "type" : "SqlQuery16/SqlQuery16.Snoop/ParMultiDo(Anonymous)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16.Snoop/ParMultiDo(Anonymous)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 11,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 13,
+    "type" : "SqlQuery16/SqlQuery16/Window.Into()/Window.Assign.out",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/Window.Into()/Window.Assign.out",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 12,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 14,
+    "type" : "SqlQuery16/SqlQuery16/SqlQuery16.Filter.Auction/ParDo(Anonymous)/ParMultiDo(Anonymous)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/SqlQuery16.Filter.Auction/ParDo(Anonymous)/ParMultiDo(Anonymous)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 13,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 15,
+    "type" : "SqlQuery16/SqlQuery16/SqlQuery16.ToRecords.Auction/ParDo(Anonymous)/ParMultiDo(Anonymous)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/SqlQuery16.ToRecords.Auction/ParDo(Anonymous)/ParMultiDo(Anonymous)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 14,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 16,
+    "type" : "SqlQuery16/SqlQuery16/SqlQuery16.Filter.Person/ParDo(Anonymous)/ParMultiDo(Anonymous)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/SqlQuery16.Filter.Person/ParDo(Anonymous)/ParMultiDo(Anonymous)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 13,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 17,
+    "type" : "SqlQuery16/SqlQuery16/SqlQuery16.ToRecords.Person/ParDo(Anonymous)/ParMultiDo(Anonymous)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/SqlQuery16.ToRecords.Person/ParDo(Anonymous)/ParMultiDo(Anonymous)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 16,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 18,
+    "type" : "SqlQuery16/SqlQuery16/SqlQuery16.Filter.Bid/ParDo(Anonymous)/ParMultiDo(Anonymous)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/SqlQuery16.Filter.Bid/ParDo(Anonymous)/ParMultiDo(Anonymous)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 13,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 19,
+    "type" : "SqlQuery16/SqlQuery16/SqlQuery16.ToRecords.Bid/ParDo(Anonymous)/ParMultiDo(Anonymous)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/SqlQuery16.ToRecords.Bid/ParDo(Anonymous)/ParMultiDo(Anonymous)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 18,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 20,
+    "type" : "SqlQuery16/SqlQuery16/MapElements/Map/ParMultiDo(Anonymous)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/MapElements/Map/ParMultiDo(Anonymous)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 15,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 21,
+    "type" : "SqlQuery16/SqlQuery16/MapElements2/Map/ParMultiDo(Anonymous)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/MapElements2/Map/ParMultiDo(Anonymous)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 17,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 22,
+    "type" : "SqlQuery16/SqlQuery16/MapElements3/Map/ParMultiDo(Anonymous)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/MapElements3/Map/ParMultiDo(Anonymous)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 19,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 23,
+    "type" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform/BeamIOSourceRel_3/Convert.ConvertTransform/ParDo(Anonymous)/ParMultiDo(Anonymous)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform/BeamIOSourceRel_3/Convert.ConvertTransform/ParDo(Anonymous)/ParMultiDo(Anonymous)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 21,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 24,
+    "type" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform/BeamAggregationRel_40/Group.CombineFieldsByFields/ToKvs/toRow/ParDo(Anonymous)/ParMultiDo(Anonymous)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform/BeamAggregationRel_40/Group.CombineFieldsByFields/ToKvs/toRow/ParDo(Anonymous)/ParMultiDo(Anonymous)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 23,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 25,
+    "type" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform/BeamAggregationRel_40/Group.CombineFieldsByFields/ToKvs/selectKeys/AddKeys/Map/ParMultiDo(Anonymous)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform/BeamAggregationRel_40/Group.CombineFieldsByFields/ToKvs/selectKeys/AddKeys/Map/ParMultiDo(Anonymous)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 24,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 26,
+    "type" : "ToBinaryKeyedWorkItem",
+    "pact" : "Operator",
+    "contents" : "ToBinaryKeyedWorkItem",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 25,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 28,
+    "type" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform/BeamAggregationRel_40/Group.CombineFieldsByFields/ToKvs/GroupByKey",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform/BeamAggregationRel_40/Group.CombineFieldsByFields/ToKvs/GroupByKey",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 26,
+      "ship_strategy" : "HASH",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 29,
+    "type" : "ToGBKResult",
+    "pact" : "Operator",
+    "contents" : "ToGBKResult",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 28,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 30,
+    "type" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform/BeamAggregationRel_40/Group.CombineFieldsByFields/Combine/ParDo(Anonymous)/ParMultiDo(Anonymous)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform/BeamAggregationRel_40/Group.CombineFieldsByFields/Combine/ParDo(Anonymous)/ParMultiDo(Anonymous)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 29,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 31,
+    "type" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform/BeamAggregationRel_40/Group.CombineFieldsByFields/ToRow/ParMultiDo(Anonymous)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform/BeamAggregationRel_40/Group.CombineFieldsByFields/ToRow/ParMultiDo(Anonymous)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 30,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 32,
+    "type" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform/BeamAggregationRel_40/mergeRecord/ParMultiDo(Anonymous)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform/BeamAggregationRel_40/mergeRecord/ParMultiDo(Anonymous)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 31,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 33,
+    "type" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform2/BeamIOSourceRel_44/Convert.ConvertTransform/ParDo(Anonymous)/ParMultiDo(Anonymous)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform2/BeamIOSourceRel_44/Convert.ConvertTransform/ParDo(Anonymous)/ParMultiDo(Anonymous)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 20,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 34,
+    "type" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform2/BeamAggregationRel_81/Group.CombineFieldsByFields/ToKvs/toRow/ParDo(Anonymous)/ParMultiDo(Anonymous)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform2/BeamAggregationRel_81/Group.CombineFieldsByFields/ToKvs/toRow/ParDo(Anonymous)/ParMultiDo(Anonymous)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 33,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 35,
+    "type" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform2/BeamAggregationRel_81/Group.CombineFieldsByFields/ToKvs/selectKeys/AddKeys/Map/ParMultiDo(Anonymous)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform2/BeamAggregationRel_81/Group.CombineFieldsByFields/ToKvs/selectKeys/AddKeys/Map/ParMultiDo(Anonymous)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 34,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 36,
+    "type" : "ToBinaryKeyedWorkItem",
+    "pact" : "Operator",
+    "contents" : "ToBinaryKeyedWorkItem",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 35,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 38,
+    "type" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform2/BeamAggregationRel_81/Group.CombineFieldsByFields/ToKvs/GroupByKey",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform2/BeamAggregationRel_81/Group.CombineFieldsByFields/ToKvs/GroupByKey",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 36,
+      "ship_strategy" : "HASH",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 39,
+    "type" : "ToGBKResult",
+    "pact" : "Operator",
+    "contents" : "ToGBKResult",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 38,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 40,
+    "type" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform2/BeamAggregationRel_81/Group.CombineFieldsByFields/Combine/ParDo(Anonymous)/ParMultiDo(Anonymous)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform2/BeamAggregationRel_81/Group.CombineFieldsByFields/Combine/ParDo(Anonymous)/ParMultiDo(Anonymous)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 39,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 41,
+    "type" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform2/BeamAggregationRel_81/Group.CombineFieldsByFields/ToRow/ParMultiDo(Anonymous)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform2/BeamAggregationRel_81/Group.CombineFieldsByFields/ToRow/ParMultiDo(Anonymous)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 40,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 42,
+    "type" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform2/BeamAggregationRel_81/mergeRecord/ParMultiDo(Anonymous)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform2/BeamAggregationRel_81/mergeRecord/ParMultiDo(Anonymous)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 41,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 43,
+    "type" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform3/BeamIOSourceRel_85/Convert.ConvertTransform/ParDo(Anonymous)/ParMultiDo(Anonymous)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform3/BeamIOSourceRel_85/Convert.ConvertTransform/ParDo(Anonymous)/ParMultiDo(Anonymous)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 22,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 44,
+    "type" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform3/BeamAggregationRel_122/Group.CombineFieldsByFields/ToKvs/toRow/ParDo(Anonymous)/ParMultiDo(Anonymous)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform3/BeamAggregationRel_122/Group.CombineFieldsByFields/ToKvs/toRow/ParDo(Anonymous)/ParMultiDo(Anonymous)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 43,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 45,
+    "type" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform3/BeamAggregationRel_122/Group.CombineFieldsByFields/ToKvs/selectKeys/AddKeys/Map/ParMultiDo(Anonymous)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform3/BeamAggregationRel_122/Group.CombineFieldsByFields/ToKvs/selectKeys/AddKeys/Map/ParMultiDo(Anonymous)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 44,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 46,
+    "type" : "ToBinaryKeyedWorkItem",
+    "pact" : "Operator",
+    "contents" : "ToBinaryKeyedWorkItem",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 45,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 48,
+    "type" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform3/BeamAggregationRel_122/Group.CombineFieldsByFields/ToKvs/GroupByKey",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform3/BeamAggregationRel_122/Group.CombineFieldsByFields/ToKvs/GroupByKey",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 46,
+      "ship_strategy" : "HASH",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 49,
+    "type" : "ToGBKResult",
+    "pact" : "Operator",
+    "contents" : "ToGBKResult",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 48,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 50,
+    "type" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform3/BeamAggregationRel_122/Group.CombineFieldsByFields/Combine/ParDo(Anonymous)/ParMultiDo(Anonymous)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform3/BeamAggregationRel_122/Group.CombineFieldsByFields/Combine/ParDo(Anonymous)/ParMultiDo(Anonymous)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 49,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 51,
+    "type" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform3/BeamAggregationRel_122/Group.CombineFieldsByFields/ToRow/ParMultiDo(Anonymous)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform3/BeamAggregationRel_122/Group.CombineFieldsByFields/ToRow/ParMultiDo(Anonymous)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 50,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 52,
+    "type" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform3/BeamAggregationRel_122/mergeRecord/ParMultiDo(Anonymous)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform3/BeamAggregationRel_122/mergeRecord/ParMultiDo(Anonymous)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 51,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 53,
+    "type" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform4/BeamIOSourceRel_134/Convert.ConvertTransform/ParDo(Anonymous)/ParMultiDo(Anonymous)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform4/BeamIOSourceRel_134/Convert.ConvertTransform/ParDo(Anonymous)/ParMultiDo(Anonymous)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 22,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 54,
+    "type" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform4/BeamIOSourceRel_131/Convert.ConvertTransform/ParDo(Anonymous)/ParMultiDo(Anonymous)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform4/BeamIOSourceRel_131/Convert.ConvertTransform/ParDo(Anonymous)/ParMultiDo(Anonymous)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 20,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 55,
+    "type" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform4/BeamIOSourceRel_132/Convert.ConvertTransform/ParDo(Anonymous)/ParMultiDo(Anonymous)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform4/BeamIOSourceRel_132/Convert.ConvertTransform/ParDo(Anonymous)/ParMultiDo(Anonymous)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 21,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 56,
+    "type" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform4/BeamCoGBKJoinRel_3587/Join.Impl/CoGroup.ExpandCrossProduct/extractKeylhs/ParMultiDo(Anonymous)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform4/BeamCoGBKJoinRel_3587/Join.Impl/CoGroup.ExpandCrossProduct/extractKeylhs/ParMultiDo(Anonymous)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 54,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 57,
+    "type" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform4/BeamCoGBKJoinRel_3587/Join.Impl/CoGroup.ExpandCrossProduct/extractKeyrhs/ParMultiDo(Anonymous)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform4/BeamCoGBKJoinRel_3587/Join.Impl/CoGroup.ExpandCrossProduct/extractKeyrhs/ParMultiDo(Anonymous)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 55,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 58,
+    "type" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform4/BeamCoGBKJoinRel_3587/Join.Impl/CoGroup.ExpandCrossProduct/CoGroupByKey/MakeUnionTable0/ParMultiDo(ConstructUnionTable)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform4/BeamCoGBKJoinRel_3587/Join.Impl/CoGroup.ExpandCrossProduct/CoGroupByKey/MakeUnionTable0/ParMultiDo(ConstructUnionTable)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 56,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 59,
+    "type" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform4/BeamCoGBKJoinRel_3587/Join.Impl/CoGroup.ExpandCrossProduct/CoGroupByKey/MakeUnionTable1/ParMultiDo(ConstructUnionTable)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform4/BeamCoGBKJoinRel_3587/Join.Impl/CoGroup.ExpandCrossProduct/CoGroupByKey/MakeUnionTable1/ParMultiDo(ConstructUnionTable)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 57,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 61,
+    "type" : "ToBinaryKeyedWorkItem",
+    "pact" : "Operator",
+    "contents" : "ToBinaryKeyedWorkItem",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 58,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    }, {
+      "id" : 59,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 63,
+    "type" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform4/BeamCoGBKJoinRel_3587/Join.Impl/CoGroup.ExpandCrossProduct/CoGroupByKey/GBK",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform4/BeamCoGBKJoinRel_3587/Join.Impl/CoGroup.ExpandCrossProduct/CoGroupByKey/GBK",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 61,
+      "ship_strategy" : "HASH",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 64,
+    "type" : "ToGBKResult",
+    "pact" : "Operator",
+    "contents" : "ToGBKResult",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 63,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 65,
+    "type" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform4/BeamCoGBKJoinRel_3587/Join.Impl/CoGroup.ExpandCrossProduct/CoGroupByKey/ConstructCoGbkResultFn/ParMultiDo(ConstructCoGbkResult)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform4/BeamCoGBKJoinRel_3587/Join.Impl/CoGroup.ExpandCrossProduct/CoGroupByKey/ConstructCoGbkResultFn/ParMultiDo(ConstructCoGbkResult)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 64,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 66,
+    "type" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform4/BeamCoGBKJoinRel_3587/Join.Impl/CoGroup.ExpandCrossProduct/ParDo(ConvertCoGbkResult)/ParMultiDo(ConvertCoGbkResult)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform4/BeamCoGBKJoinRel_3587/Join.Impl/CoGroup.ExpandCrossProduct/ParDo(ConvertCoGbkResult)/ParMultiDo(ConvertCoGbkResult)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 65,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 67,
+    "type" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform4/BeamCoGBKJoinRel_3587/Select.Fields/ParDo(Select)/ParMultiDo(Select)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform4/BeamCoGBKJoinRel_3587/Select.Fields/ParDo(Select)/ParMultiDo(Select)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 66,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 68,
+    "type" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform4/BeamCoGBKJoinRel_3588/Join.Impl/CoGroup.ExpandCrossProduct/extractKeylhs/ParMultiDo(Anonymous)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform4/BeamCoGBKJoinRel_3588/Join.Impl/CoGroup.ExpandCrossProduct/extractKeylhs/ParMultiDo(Anonymous)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 53,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 69,
+    "type" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform4/BeamCoGBKJoinRel_3588/Join.Impl/CoGroup.ExpandCrossProduct/extractKeyrhs/ParMultiDo(Anonymous)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform4/BeamCoGBKJoinRel_3588/Join.Impl/CoGroup.ExpandCrossProduct/extractKeyrhs/ParMultiDo(Anonymous)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 67,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 70,
+    "type" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform4/BeamCoGBKJoinRel_3588/Join.Impl/CoGroup.ExpandCrossProduct/CoGroupByKey/MakeUnionTable0/ParMultiDo(ConstructUnionTable)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform4/BeamCoGBKJoinRel_3588/Join.Impl/CoGroup.ExpandCrossProduct/CoGroupByKey/MakeUnionTable0/ParMultiDo(ConstructUnionTable)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 68,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 71,
+    "type" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform4/BeamCoGBKJoinRel_3588/Join.Impl/CoGroup.ExpandCrossProduct/CoGroupByKey/MakeUnionTable1/ParMultiDo(ConstructUnionTable)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform4/BeamCoGBKJoinRel_3588/Join.Impl/CoGroup.ExpandCrossProduct/CoGroupByKey/MakeUnionTable1/ParMultiDo(ConstructUnionTable)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 69,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 73,
+    "type" : "ToBinaryKeyedWorkItem",
+    "pact" : "Operator",
+    "contents" : "ToBinaryKeyedWorkItem",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 70,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    }, {
+      "id" : 71,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 75,
+    "type" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform4/BeamCoGBKJoinRel_3588/Join.Impl/CoGroup.ExpandCrossProduct/CoGroupByKey/GBK",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform4/BeamCoGBKJoinRel_3588/Join.Impl/CoGroup.ExpandCrossProduct/CoGroupByKey/GBK",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 73,
+      "ship_strategy" : "HASH",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 76,
+    "type" : "ToGBKResult",
+    "pact" : "Operator",
+    "contents" : "ToGBKResult",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 75,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 77,
+    "type" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform4/BeamCoGBKJoinRel_3588/Join.Impl/CoGroup.ExpandCrossProduct/CoGroupByKey/ConstructCoGbkResultFn/ParMultiDo(ConstructCoGbkResult)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform4/BeamCoGBKJoinRel_3588/Join.Impl/CoGroup.ExpandCrossProduct/CoGroupByKey/ConstructCoGbkResultFn/ParMultiDo(ConstructCoGbkResult)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 76,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 78,
+    "type" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform4/BeamCoGBKJoinRel_3588/Join.Impl/CoGroup.ExpandCrossProduct/ParDo(ConvertCoGbkResult)/ParMultiDo(ConvertCoGbkResult)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform4/BeamCoGBKJoinRel_3588/Join.Impl/CoGroup.ExpandCrossProduct/ParDo(ConvertCoGbkResult)/ParMultiDo(ConvertCoGbkResult)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 77,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 79,
+    "type" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform4/BeamCoGBKJoinRel_3588/Select.Fields/ParDo(Select)/ParMultiDo(Select)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform4/BeamCoGBKJoinRel_3588/Select.Fields/ParDo(Select)/ParMultiDo(Select)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 78,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 80,
+    "type" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform4/BeamCalcRel_3589/ParDo(Calc)/ParMultiDo(Calc)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/NexmarkSqlTransform4/BeamCalcRel_3589/ParDo(Calc)/ParMultiDo(Calc)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 79,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 81,
+    "type" : "SqlQuery16/SqlQuery16/MapElements4/Map/ParMultiDo(Anonymous)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/MapElements4/Map/ParMultiDo(Anonymous)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 80,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 82,
+    "type" : "SqlQuery16/SqlQuery16/Combine.globally(Latency)/WithKeys/AddKeys/Map/ParMultiDo(Anonymous)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/Combine.globally(Latency)/WithKeys/AddKeys/Map/ParMultiDo(Anonymous)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 81,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 83,
+    "type" : "ToKeyedWorkItem",
+    "pact" : "Operator",
+    "contents" : "ToKeyedWorkItem",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 82,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 85,
+    "type" : "SqlQuery16/SqlQuery16/Combine.globally(Latency)/Combine.perKey(Latency)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/Combine.globally(Latency)/Combine.perKey(Latency)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 83,
+      "ship_strategy" : "HASH",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 86,
+    "type" : "SqlQuery16/SqlQuery16/Combine.globally(Latency)/Values/Values/Map/ParMultiDo(Anonymous)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/Combine.globally(Latency)/Values/Values/Map/ParMultiDo(Anonymous)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 85,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 87,
+    "type" : "SqlQuery16/SqlQuery16/ToString.Elements/MapElements/Map/ParMultiDo(Anonymous)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/ToString.Elements/MapElements/Map/ParMultiDo(Anonymous)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 86,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 88,
+    "type" : "SqlQuery16/SqlQuery16/TextIO.Write/WriteFiles/WriteShardedBundlesToTempFiles/ApplyShardingKey/ParMultiDo(ApplyShardingFunction)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/TextIO.Write/WriteFiles/WriteShardedBundlesToTempFiles/ApplyShardingKey/ParMultiDo(ApplyShardingFunction)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 87,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 89,
+    "type" : "ToBinaryKeyedWorkItem",
+    "pact" : "Operator",
+    "contents" : "ToBinaryKeyedWorkItem",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 88,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 91,
+    "type" : "SqlQuery16/SqlQuery16/TextIO.Write/WriteFiles/WriteShardedBundlesToTempFiles/GroupIntoShards",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/TextIO.Write/WriteFiles/WriteShardedBundlesToTempFiles/GroupIntoShards",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 89,
+      "ship_strategy" : "HASH",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 92,
+    "type" : "ToGBKResult",
+    "pact" : "Operator",
+    "contents" : "ToGBKResult",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 91,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 93,
+    "type" : "SqlQuery16/SqlQuery16/TextIO.Write/WriteFiles/WriteShardedBundlesToTempFiles/WriteShardsIntoTempFiles/ParMultiDo(WriteShardsIntoTempFiles)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/TextIO.Write/WriteFiles/WriteShardedBundlesToTempFiles/WriteShardsIntoTempFiles/ParMultiDo(WriteShardsIntoTempFiles)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 92,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 94,
+    "type" : "SqlQuery16/SqlQuery16/TextIO.Write/WriteFiles/GatherTempFileResults/Add void key/AddKeys/Map/ParMultiDo(Anonymous)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/TextIO.Write/WriteFiles/GatherTempFileResults/Add void key/AddKeys/Map/ParMultiDo(Anonymous)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 93,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 96,
+    "type" : "SqlQuery16/SqlQuery16/TextIO.Write/WriteFiles/GatherTempFileResults/Drop key/Values/Map/ParMultiDo(Anonymous)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/TextIO.Write/WriteFiles/GatherTempFileResults/Drop key/Values/Map/ParMultiDo(Anonymous)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 94,
+      "ship_strategy" : "REBALANCE",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 97,
+    "type" : "SqlQuery16/SqlQuery16/TextIO.Write/WriteFiles/GatherTempFileResults/Gather bundles/ParMultiDo(GatherBundlesPerWindow)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/TextIO.Write/WriteFiles/GatherTempFileResults/Gather bundles/ParMultiDo(GatherBundlesPerWindow)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 96,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 98,
+    "type" : "SqlQuery16/SqlQuery16/TextIO.Write/WriteFiles/GatherTempFileResults/Reshuffle.ViaRandomKey/Pair with random key/ParMultiDo(AssignShard)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/TextIO.Write/WriteFiles/GatherTempFileResults/Reshuffle.ViaRandomKey/Pair with random key/ParMultiDo(AssignShard)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 97,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 100,
+    "type" : "SqlQuery16/SqlQuery16/TextIO.Write/WriteFiles/GatherTempFileResults/Reshuffle.ViaRandomKey/Values/Values/Map/ParMultiDo(Anonymous)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/TextIO.Write/WriteFiles/GatherTempFileResults/Reshuffle.ViaRandomKey/Values/Values/Map/ParMultiDo(Anonymous)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 98,
+      "ship_strategy" : "REBALANCE",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 101,
+    "type" : "SqlQuery16/SqlQuery16/TextIO.Write/WriteFiles/FinalizeTempFileBundles/Finalize/ParMultiDo(Finalize)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/TextIO.Write/WriteFiles/FinalizeTempFileBundles/Finalize/ParMultiDo(Finalize)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 100,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 102,
+    "type" : "SqlQuery16/SqlQuery16/TextIO.Write/WriteFiles/FinalizeTempFileBundles/Reshuffle.ViaRandomKey/Pair with random key/ParMultiDo(AssignShard)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/TextIO.Write/WriteFiles/FinalizeTempFileBundles/Reshuffle.ViaRandomKey/Pair with random key/ParMultiDo(AssignShard)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 101,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 104,
+    "type" : "SqlQuery16/SqlQuery16/TextIO.Write/WriteFiles/FinalizeTempFileBundles/Reshuffle.ViaRandomKey/Values/Values/Map/ParMultiDo(Anonymous)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16/TextIO.Write/WriteFiles/FinalizeTempFileBundles/Reshuffle.ViaRandomKey/Values/Values/Map/ParMultiDo(Anonymous)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 102,
+      "ship_strategy" : "REBALANCE",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 105,
+    "type" : "SqlQuery16/SqlQuery16.Debug/ParMultiDo(Monitor)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16.Debug/ParMultiDo(Monitor)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 86,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 106,
+    "type" : "SqlQuery16/SqlQuery16.Stamp/ParMultiDo(Anonymous)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16/SqlQuery16.Stamp/ParMultiDo(Anonymous)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 105,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 107,
+    "type" : "SqlQuery16.Format/ParMultiDo(Anonymous)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16.Format/ParMultiDo(Anonymous)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 106,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  }, {
+    "id" : 108,
+    "type" : "SqlQuery16.DevNull/ParMultiDo(Anonymous)",
+    "pact" : "Operator",
+    "contents" : "SqlQuery16.DevNull/ParMultiDo(Anonymous)",
+    "parallelism" : 1,
+    "predecessors" : [ {
+      "id" : 107,
+      "ship_strategy" : "FORWARD",
+      "side" : "second"
+    } ]
+  } ]
+}

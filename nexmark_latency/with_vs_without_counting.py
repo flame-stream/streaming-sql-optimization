@@ -45,7 +45,6 @@ def run(window_size, query, counting):
     output = stream.read()
     # time = pvarse_output(output)
     latency = get_result()
-    print(latency)
     return latency
 
 
@@ -65,7 +64,7 @@ def get_result():
             os.unlink(os.path.join(log_dir, elem))
         else:
             shutil.rmtree(os.path.join(log_dir, elem))
-
+    print(f"   ->   {results}")
     return mean(results)
 
 
@@ -79,10 +78,10 @@ def parse_output(output):
 def run_n_times(window_size, n, query, counting):
     mean_latency_list = []
     for i in range(n):
-        print(f"RUN № {i}")
         latency = run(window_size, query, counting)
-        print(f"  {latency}")
         mean_latency_list.append(latency)
+        k = i + 1
+        print(f"run №{k} of {n}, latency is {latency}")
     return mean_latency_list, mean(mean_latency_list)
 
 
@@ -97,13 +96,17 @@ if __name__ == "__main__":
         latency_list, mean_latency = run_n_times(win_size, runs_count, 1, True)
         for elem in latency_list:
             f.write(str(elem) + "\n")
+            print(str(elem))
         f.write("MEAN LATENCY = " + str(mean_latency) + "\n")
+        print("MEAN LATENCY = " + str(mean_latency))
 
         f.write("QUERY_1 WITHOUT COUNTING: \n")
         print("QUERY_1 WITHOUT COUNTING:")
         latency_list, mean_latency = run_n_times(win_size, runs_count, 1, False)
         for elem in latency_list:
             f.write(str(elem) + "\n")
+            print(str(elem))
         f.write("MEAN LATENCY = " + str(mean_latency) + "\n")
+        print("MEAN LATENCY = " + str(mean_latency))
 
         print("FINISHED")

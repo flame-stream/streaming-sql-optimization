@@ -1085,6 +1085,8 @@ public class NexmarkLauncher<OptionT extends NexmarkOptions> {
     try {
       NexmarkUtils.console("Running %s", configuration.toShortString());
 
+      NexmarkUtils.console("Configuration %s", configuration.toString());
+
       if (configuration.numEvents < 0) {
         NexmarkUtils.console("skipping since configuration is disabled");
         return null;
@@ -1171,6 +1173,7 @@ public class NexmarkLauncher<OptionT extends NexmarkOptions> {
       LOG.error(dotString);
 
       mainResult = p.run();
+
       mainResult.waitUntilFinish(Duration.standardSeconds(configuration.streamTimeout));
 
       return monitor(query);

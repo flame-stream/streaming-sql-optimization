@@ -4,7 +4,8 @@ import org.apache.beam.sdk.extensions.sql.impl.CalciteQueryPlanner;
 import org.apache.beam.sdk.io.TextIO;
 import org.apache.beam.sdk.nexmark.NexmarkConfiguration;
 import org.apache.beam.sdk.nexmark.latency.NexmarkSqlTransform;
-import org.apache.beam.sdk.transforms.ToString;
+import org.apache.beam.sdk.nexmark.utils.LoggingDoFn;
+import org.apache.beam.sdk.transforms.*;
 import org.apache.beam.sdk.values.PCollection;
 import org.apache.beam.sdk.values.PCollectionTuple;
 import org.apache.beam.sdk.values.Row;
@@ -63,5 +64,19 @@ public class SqlCounter {
 //                        .withWindowedWrites()
 //                        .withNumShards(1)
 //                        .withSuffix("_BID.txt"));
+    }
+
+    public static void applyCountingVer2(PCollectionTuple withTags, NexmarkConfiguration configuration) {
+        var auctions = withTags.get("Auction");
+        auctions.apply(Combine.globally(Count.combineFn()).withoutDefaults())
+                .apply(ParDo.of(new LoggingDoFn<>()));
+
+        var persons = withTags.get("Person");
+        persons.apply(Combine.globally(Count.combineFn()).withoutDefaults())
+                .apply(ParDo.of(new LoggingDoFn<>()));
+
+        var bids = withTags.get("Bid");
+        bids.apply(Combine.globally(Count.combineFn()).withoutDefaults())
+                .apply(ParDo.of(new LoggingDoFn<>()));
     }
 }

@@ -100,10 +100,10 @@ public class NexmarkConfiguration implements Serializable {
   @JsonProperty public NexmarkUtils.RateShape rateShape = NexmarkUtils.RateShape.SINE;
 
   /** Initial overall event rate (in {@link #rateUnit}). */
-  @JsonProperty public int firstEventRate = 11_000;
+  @JsonProperty public int firstEventRate = 10_000;
 
   /** Next overall event rate (in {@link #rateUnit}). */
-  @JsonProperty public int nextEventRate = 11_000;
+  @JsonProperty public int nextEventRate = 10_000;
 
   /** Unit for rates. */
   @JsonProperty public NexmarkUtils.RateUnit rateUnit = NexmarkUtils.RateUnit.PER_SECOND;
@@ -214,12 +214,12 @@ public class NexmarkConfiguration implements Serializable {
   /**
    * Path to latency log directory where the results of latency computations are output.
    */
-  @JsonProperty public String latencyLogDirectory = "./latencyLog";
+  @JsonProperty public String latencyLogDirectory = "./log/lololo";
 
   /** Proportions of people/auctions/bids to synthesize. */
   @JsonProperty public int PERSON_PROPORTION = 5;
-  @JsonProperty public int AUCTION_PROPORTION = 5;
-  @JsonProperty public int BID_PROPORTION = 90;
+  @JsonProperty public int AUCTION_PROPORTION = 90;
+  @JsonProperty public int BID_PROPORTION = 5;
 
   /** Flag to count persons, auctions, bids per window.  */
   @JsonProperty public boolean counting = false;

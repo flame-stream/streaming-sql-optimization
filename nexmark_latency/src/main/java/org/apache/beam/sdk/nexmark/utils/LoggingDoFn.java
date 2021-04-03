@@ -2,13 +2,12 @@ package org.apache.beam.sdk.nexmark.utils;
 
 import org.apache.beam.sdk.transforms.DoFn;
 import org.apache.beam.sdk.transforms.windowing.BoundedWindow;
-import org.apache.beam.sdk.values.Row;
 import org.joda.time.Instant;
 
 /**
  * Utility logging transform. Usage: .apply(ParDo.of(new LoggingDoFn())).
  */
-public class LoggingDoFn extends DoFn<Row, Row> {
+public class LoggingDoFn<T> extends DoFn<T, T> {
     private String prefix = "";
 
     public LoggingDoFn() {
@@ -20,10 +19,10 @@ public class LoggingDoFn extends DoFn<Row, Row> {
 
     @ProcessElement
     public void processElement(ProcessContext c, BoundedWindow window, @Timestamp Instant timestamp) {
-        Row row = c.element();
-            /*if (row != null) {
-                // do smth here
-            }*/
+        T row = c.element();
+        if (row != null) {
+            System.out.println(row.toString());
+        }
         c.output(row);
     }
 }

@@ -70,22 +70,24 @@ public class SqlQuery18 extends NexmarkQueryTransform<ReceiveArrivalTimes> {
                         Window.into(FixedWindows.of(Duration.standardSeconds(configuration.windowSizeSec))));
 
         String auctionName = Auction.class.getSimpleName();
+        String personName = Person.class.getSimpleName();
+        String bidName = Bid.class.getSimpleName();
+
         PCollection<Row> auctions =
                 windowed
                         .apply(getName() + ".Filter." + auctionName, Filter.by(e1 -> e1.newAuction != null))
                         .apply(getName() + ".ToRecords." + auctionName, new SelectEvent(Type.AUCTION));
-
-        String personName = Person.class.getSimpleName();
 
         PCollection<Row> people =
                 windowed
                         .apply(getName() + ".Filter." + personName, Filter.by(e -> e.newPerson != null))
                         .apply(getName() + ".ToRecords." + personName, new SelectEvent(Type.PERSON));
 
+
         PCollection<Row> bids =
                 windowed
-                        .apply(getName() + ".Filter." + personName, Filter.by(e -> e.bid != null))
-                        .apply(getName() + ".ToRecords." + personName, new SelectEvent(Type.BID));
+                        .apply(getName() + ".Filter." + bidName, Filter.by(e -> e.bid != null))
+                        .apply(getName() + ".ToRecords." + bidName, new SelectEvent(Type.BID));
 
 
         Schema auctionsWithReceiveTime = Schema.builder()
@@ -108,7 +110,6 @@ public class SqlQuery18 extends NexmarkQueryTransform<ReceiveArrivalTimes> {
                 .setRowSchema(bidsWithReceiveTime)
                 .apply(MapElements.via(new AddReceiveTime()))
                 .setRowSchema(bidsWithReceiveTime);
-
 
         TupleTag<Row> bidTag = new TupleTag<>("Bid");
         TupleTag<Row> auctionTag = new TupleTag<>("Auction");
