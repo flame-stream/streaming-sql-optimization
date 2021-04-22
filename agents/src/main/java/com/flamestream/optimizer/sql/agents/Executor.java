@@ -1,6 +1,13 @@
 package com.flamestream.optimizer.sql.agents;
 
+import org.apache.beam.sdk.Pipeline;
+
+import javax.annotation.Nullable;
+
 public interface Executor {
-    void startJob(String flinkJob);
-    void changeJob(String newJob);
+    // blocking, not async
+    boolean startOrUpdate(Pipeline pipeline);
+
+    @Nullable
+    Pipeline current();
 }
