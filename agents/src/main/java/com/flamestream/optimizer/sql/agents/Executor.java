@@ -3,16 +3,13 @@ package com.flamestream.optimizer.sql.agents;
 import org.apache.beam.sdk.Pipeline;
 
 import javax.annotation.Nullable;
+import java.util.function.Consumer;
 
 public interface Executor {
-    ChangingContext startOrUpdate(Pipeline pipeline);
+    void startOrUpdate(Pipeline pipeline, Consumer<ChangingStatus> statusConsumer);
 
     @Nullable
     Pipeline current();
-
-    interface ChangingContext {
-        ChangingStatus getStatus();
-    }
 
     enum ChangingStatus {
         CHANGING_STARTED,

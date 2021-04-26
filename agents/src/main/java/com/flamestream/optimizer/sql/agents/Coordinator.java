@@ -7,6 +7,7 @@ import org.apache.beam.sdk.values.PCollection;
 import org.apache.beam.sdk.values.PInput;
 import org.apache.beam.sdk.values.POutput;
 import org.apache.beam.sdk.values.Row;
+import org.apache.calcite.tools.Planner;
 
 import java.util.function.Consumer;
 import java.util.stream.Stream;
@@ -14,6 +15,9 @@ import java.util.stream.Stream;
 interface Coordinator {
     PInput registerInput(String tag, PInput source);
     Stream<PInput> inputs();
+
+    Planner getPlanner();
+    CostEstimator getCostEstimator();
 
     QueryContext start(QueryJob queryJob);
 
