@@ -1,20 +1,18 @@
 package com.flamestream.optimizer.sql.agents;
 
+import org.apache.beam.sdk.io.UnboundedSource;
 import org.apache.beam.sdk.transforms.Combine;
 import org.apache.beam.sdk.transforms.PTransform;
 import org.apache.beam.sdk.transforms.SerializableFunction;
-import org.apache.beam.sdk.values.PCollection;
-import org.apache.beam.sdk.values.PInput;
-import org.apache.beam.sdk.values.POutput;
-import org.apache.beam.sdk.values.Row;
+import org.apache.beam.sdk.values.*;
 import org.apache.calcite.tools.Planner;
-
-import java.util.function.Consumer;
+import org.checkerframework.checker.nullness.compatqual.NonNullType;
 import java.util.stream.Stream;
 
 interface Coordinator {
-    PInput registerInput(String tag, PInput source);
-    Stream<PInput> inputs();
+    UnboundedSource<Row, @NonNullType ? extends UnboundedSource.CheckpointMark>
+        registerInput(String tag, UnboundedSource<Row, @NonNullType ? extends UnboundedSource.CheckpointMark> source);
+    Stream<UnboundedSource<Row, @NonNullType ? extends UnboundedSource.CheckpointMark>> inputs();
 
     Planner getPlanner();
     CostEstimator getCostEstimator();
@@ -23,11 +21,11 @@ interface Coordinator {
 
     interface QueryJob {
         String query();
-        Stream<POutput> outputs();
+        Stream<PTransform<PCollection<Row>, PDone>> outputs();
     }
 
     interface QueryJobBuilder {
-        QueryJobBuilder addOutput(POutput sink);
+        QueryJobBuilder addOutput(PTransform<PCollection<Row>, PDone> sink);
 
         QueryJobBuilder setPreHook(PTransform<PCollection<Row>, PCollection<Row>> hook);
         QueryJobBuilder setPostHook(PTransform<PCollection<Row>, PCollection<Row>> hook);
