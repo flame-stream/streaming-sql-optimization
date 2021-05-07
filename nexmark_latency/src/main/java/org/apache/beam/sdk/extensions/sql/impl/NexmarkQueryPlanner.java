@@ -17,11 +17,6 @@
  */
 package org.apache.beam.sdk.extensions.sql.impl;
 
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
-import org.apache.beam.sdk.extensions.sql.impl.QueryPlanner.Factory;
 import org.apache.beam.sdk.extensions.sql.impl.QueryPlanner.QueryParameters.Kind;
 import org.apache.beam.sdk.extensions.sql.impl.planner.BeamCostModel;
 import org.apache.beam.sdk.extensions.sql.impl.planner.RelMdNodeStats;
@@ -30,24 +25,12 @@ import org.apache.beam.sdk.extensions.sql.impl.rel.BeamRelNode;
 import org.apache.beam.vendor.calcite.v1_20_0.com.google.common.collect.ImmutableList;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.config.CalciteConnectionConfig;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.jdbc.CalciteSchema;
-import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.plan.Contexts;
-import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.plan.ConventionTraitDef;
-import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.plan.RelOptCost;
+import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.plan.*;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.plan.RelOptPlanner.CannotPlanException;
-import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.plan.RelOptUtil;
-import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.plan.RelTraitDef;
-import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.plan.RelTraitSet;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.prepare.CalciteCatalogReader;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rel.RelNode;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rel.RelRoot;
-import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rel.metadata.BuiltInMetadata;
-import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rel.metadata.ChainedRelMetadataProvider;
-import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rel.metadata.JaninoRelMetadataProvider;
-import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rel.metadata.MetadataDef;
-import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rel.metadata.MetadataHandler;
-import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rel.metadata.ReflectiveRelMetadataProvider;
-import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rel.metadata.RelMetadataProvider;
-import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rel.metadata.RelMetadataQuery;
+import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rel.metadata.*;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.schema.SchemaPlus;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.sql.SqlNode;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.sql.SqlOperatorTable;
@@ -56,16 +39,16 @@ import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.sql.parser.SqlP
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.sql.parser.SqlParser;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.sql.parser.SqlParserImplFactory;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.sql.util.ChainedSqlOperatorTable;
-import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.tools.FrameworkConfig;
-import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.tools.Frameworks;
-import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.tools.Planner;
-import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.tools.RelConversionException;
-import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.tools.RuleSet;
-import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.tools.ValidationException;
+import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.tools.*;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.util.BuiltInMethod;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * The core component to handle through a SQL statement, from explain execution plan, to generate a
@@ -81,7 +64,9 @@ public class NexmarkQueryPlanner implements QueryPlanner {
     private final Planner planner;
     private final JdbcConnection connection;
 
-    /** Called by {@link BeamSqlEnv}.instantiatePlanner() reflectively. */
+    /**
+     * Called by {@link BeamSqlEnv}.instantiatePlanner() reflectively.
+     */
     public NexmarkQueryPlanner(JdbcConnection connection, Collection<RuleSet> ruleSets) {
         this.connection = connection;
         this.planner = Frameworks.getPlanner(defaultConfig(connection, ruleSets));
@@ -137,7 +122,9 @@ public class NexmarkQueryPlanner implements QueryPlanner {
                 .build();
     }
 
-    /** Parse input SQL query, and return a {@link SqlNode} as grammar tree. */
+    /**
+     * Parse input SQL query, and return a {@link SqlNode} as grammar tree.
+     */
     @Override
     public SqlNode parse(String sqlStatement) throws ParseException {
         SqlNode parsed;
