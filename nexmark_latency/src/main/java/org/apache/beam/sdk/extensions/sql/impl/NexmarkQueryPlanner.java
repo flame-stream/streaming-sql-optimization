@@ -181,8 +181,8 @@ public class NexmarkQueryPlanner implements QueryPlanner {
                     .setMetadataProvider(
                             ChainedRelMetadataProvider.of(
                                     ImmutableList.of(
-                                            Provider.DISTINCT_ROW_COUNT,
-                                            Provider.SELECTIVITY,
+                                            DistinctRowCountHandler.PROVIDER,
+                                            SelectivityHandler.PROVIDER,
                                             NonCumulativeCostImpl.SOURCE,
                                             RelMdNodeStats.SOURCE,
                                             root.rel.getCluster().getMetadataProvider())));
@@ -202,51 +202,14 @@ public class NexmarkQueryPlanner implements QueryPlanner {
         return beamRelNode;
     }
 
-    public enum Provider implements MetadataHandler<BuiltInMetadata.Selectivity> {
+    public enum DistinctRowCountHandler implements MetadataHandler<BuiltInMetadata.DistinctRowCount> {
         INSTANCE;
-        public static final RelMetadataProvider SELECTIVITY =
-                ReflectiveRelMetadataProvider.reflectiveSource(BuiltInMethod.SELECTIVITY.method, INSTANCE);
-        public static final RelMetadataProvider DISTINCT_ROW_COUNT =
+        public static final RelMetadataProvider PROVIDER =
                 ReflectiveRelMetadataProvider.reflectiveSource(BuiltInMethod.DISTINCT_ROW_COUNT.method, INSTANCE);
 
         @Override
-        public MetadataDef<BuiltInMetadata.Selectivity> getDef() {
-            return BuiltInMetadata.Selectivity.DEF;
-        }
-
-        // https://github.com/apache/calcite/blob/d9a81b88ad561e7e4cedae93e805e0d7a53a7f1a/core/src/main/java/org/apache/calcite/rel/metadata/RelMdSelectivity.java#L148
-        @SuppressWarnings("UnusedDeclaration")
-        public Double getSelectivity(Join rel, RelMetadataQuery mq, RexNode predicate) {
-            // return RelMdSelectivity#getSelectivity;
-            double sel = 1.0D;
-            if (predicate != null && !predicate.isAlwaysTrue()) {
-                double artificialSel = 1.0D;
-
-                for (var conjunction : RelOptUtil.conjunctions(predicate)) {
-                    if (conjunction.getKind() == SqlKind.IS_NOT_NULL) {
-                        sel *= 0.9D;
-                    } else if (conjunction instanceof RexCall && ((RexCall) conjunction).getOperator() == RelMdUtil.ARTIFICIAL_SELECTIVITY_FUNC) {
-                        artificialSel *= RelMdUtil.getSelectivityValue(conjunction);
-                    } else if (conjunction.isA(SqlKind.EQUALS)) {
-                        final var equals = (RexCall) conjunction;
-                        final var uniqueLeft = uniqueValues(rel, mq, equals.getOperands().get(0));
-                        final var uniqueRight = uniqueValues(rel, mq, equals.getOperands().get(1));
-                        if (uniqueLeft != null && uniqueRight != null) {
-                            sel *= Double.min(uniqueLeft, uniqueRight) / uniqueLeft / uniqueRight;
-                        } else {
-                            sel *= 0.15D;
-                        }
-                    } else if (conjunction.isA(SqlKind.COMPARISON)) {
-                        sel *= 0.5D;
-                    } else {
-                        sel *= 0.25D;
-                    }
-                }
-
-                return sel * artificialSel;
-            } else {
-                return sel;
-            }
+        public MetadataDef<BuiltInMetadata.DistinctRowCount> getDef() {
+            return BuiltInMetadata.DistinctRowCount.DEF;
         }
 
         // https://github.com/apache/calcite/blob/70d59fedfdb9fc956f3b1d1764833cbded7ae44d/core/src/main/java/org/apache/calcite/rel/metadata/RelMdDistinctRowCount.java#L301
@@ -291,6 +254,52 @@ public class NexmarkQueryPlanner implements QueryPlanner {
 
         private static boolean matchTableColumn(String column, BeamIOSourceRel rel, ImmutableBitSet groupKey) {
             return ImmutableBitSet.of(rel.getBeamSqlTable().getSchema().indexOf(column)).equals(groupKey);
+        }
+    }
+
+    public enum SelectivityHandler implements MetadataHandler<BuiltInMetadata.Selectivity> {
+        INSTANCE;
+        public static final RelMetadataProvider PROVIDER =
+                ReflectiveRelMetadataProvider.reflectiveSource(BuiltInMethod.SELECTIVITY.method, INSTANCE);
+
+        @Override
+        public MetadataDef<BuiltInMetadata.Selectivity> getDef() {
+            return BuiltInMetadata.Selectivity.DEF;
+        }
+
+        // https://github.com/apache/calcite/blob/d9a81b88ad561e7e4cedae93e805e0d7a53a7f1a/core/src/main/java/org/apache/calcite/rel/metadata/RelMdSelectivity.java#L148
+        @SuppressWarnings("UnusedDeclaration")
+        public Double getSelectivity(Join rel, RelMetadataQuery mq, RexNode predicate) {
+            // return RelMdSelectivity#getSelectivity;
+            double sel = 1.0D;
+            if (predicate != null && !predicate.isAlwaysTrue()) {
+                double artificialSel = 1.0D;
+
+                for (var conjunction : RelOptUtil.conjunctions(predicate)) {
+                    if (conjunction.getKind() == SqlKind.IS_NOT_NULL) {
+                        sel *= 0.9D;
+                    } else if (conjunction instanceof RexCall && ((RexCall) conjunction).getOperator() == RelMdUtil.ARTIFICIAL_SELECTIVITY_FUNC) {
+                        artificialSel *= RelMdUtil.getSelectivityValue(conjunction);
+                    } else if (conjunction.isA(SqlKind.EQUALS)) {
+                        final var equals = (RexCall) conjunction;
+                        final var uniqueLeft = uniqueValues(rel, mq, equals.getOperands().get(0));
+                        final var uniqueRight = uniqueValues(rel, mq, equals.getOperands().get(1));
+                        if (uniqueLeft != null && uniqueRight != null) {
+                            sel *= Double.min(uniqueLeft, uniqueRight) / uniqueLeft / uniqueRight;
+                        } else {
+                            sel *= 0.15D;
+                        }
+                    } else if (conjunction.isA(SqlKind.COMPARISON)) {
+                        sel *= 0.5D;
+                    } else {
+                        sel *= 0.25D;
+                    }
+                }
+
+                return sel * artificialSel;
+            } else {
+                return sel;
+            }
         }
 
         private Double uniqueValues(Join rel, RelMetadataQuery mq, RexNode node) {
