@@ -20,6 +20,7 @@ package org.apache.beam.sdk.extensions.sql.impl;
 import org.apache.beam.sdk.extensions.sql.impl.QueryPlanner.QueryParameters.Kind;
 import org.apache.beam.sdk.extensions.sql.impl.planner.BeamCostModel;
 import org.apache.beam.sdk.extensions.sql.impl.planner.RelMdNodeStats;
+import org.apache.beam.sdk.extensions.sql.impl.rel.BeamIOSourceRel;
 import org.apache.beam.sdk.extensions.sql.impl.rel.BeamLogicalConvention;
 import org.apache.beam.sdk.extensions.sql.impl.rel.BeamRelNode;
 import org.apache.beam.vendor.calcite.v1_20_0.com.google.common.collect.ImmutableList;
@@ -27,11 +28,17 @@ import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.config.CalciteC
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.jdbc.CalciteSchema;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.plan.*;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.plan.RelOptPlanner.CannotPlanException;
+import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.plan.volcano.RelSubset;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.prepare.CalciteCatalogReader;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rel.RelNode;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rel.RelRoot;
+import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rel.core.Join;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rel.metadata.*;
+import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rex.RexCall;
+import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rex.RexInputRef;
+import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rex.RexNode;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.schema.SchemaPlus;
+import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.sql.SqlKind;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.sql.SqlNode;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.sql.SqlOperatorTable;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.sql.fun.SqlStdOperatorTable;
@@ -41,10 +48,13 @@ import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.sql.parser.SqlP
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.sql.util.ChainedSqlOperatorTable;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.tools.*;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.util.BuiltInMethod;
+import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.util.ImmutableBitSet;
+import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.util.NumberUtil;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -171,6 +181,8 @@ public class NexmarkQueryPlanner implements QueryPlanner {
                     .setMetadataProvider(
                             ChainedRelMetadataProvider.of(
                                     ImmutableList.of(
+                                            DistinctRowCountHandler.PROVIDER,
+                                            SelectivityHandler.PROVIDER,
                                             NonCumulativeCostImpl.SOURCE,
                                             RelMdNodeStats.SOURCE,
                                             root.rel.getCluster().getMetadataProvider())));
@@ -188,6 +200,120 @@ public class NexmarkQueryPlanner implements QueryPlanner {
             planner.close();
         }
         return beamRelNode;
+    }
+
+    public enum DistinctRowCountHandler implements MetadataHandler<BuiltInMetadata.DistinctRowCount> {
+        INSTANCE;
+        public static final RelMetadataProvider PROVIDER =
+                ReflectiveRelMetadataProvider.reflectiveSource(BuiltInMethod.DISTINCT_ROW_COUNT.method, INSTANCE);
+
+        @Override
+        public MetadataDef<BuiltInMetadata.DistinctRowCount> getDef() {
+            return BuiltInMetadata.DistinctRowCount.DEF;
+        }
+
+        // https://github.com/apache/calcite/blob/70d59fedfdb9fc956f3b1d1764833cbded7ae44d/core/src/main/java/org/apache/calcite/rel/metadata/RelMdDistinctRowCount.java#L301
+        @SuppressWarnings("UnusedDeclaration")
+        public Double getDistinctRowCount(RelSubset rel, RelMetadataQuery mq, ImmutableBitSet groupKey, RexNode predicate) {
+            final RelNode best = rel.getBest();
+            if (best != null) {
+                return mq.getDistinctRowCount(best, groupKey, predicate);
+            }
+            Double value = null;
+            for (var equivalent : rel.getRels()) {
+                try {
+                    value = NumberUtil.min(value, mq.getDistinctRowCount(equivalent, groupKey, predicate));
+                } catch (CyclicMetadataException e) {
+                    // Ignore this relational expression; there will be non-cyclic ones
+                    // in this set.
+                }
+            }
+            return value;
+        }
+
+        @SuppressWarnings("UnusedDeclaration")
+        public Double getDistinctRowCount(BeamIOSourceRel rel, RelMetadataQuery mq, ImmutableBitSet groupKey, RexNode predicate) {
+            if (
+                    matchTable("Bid", rel) && matchTableColumn("auction", rel, groupKey)
+                            || matchTable("Auction", rel) && matchTableColumn("id", rel, groupKey)
+            ) {
+                return 100.0;
+            }
+            if (
+                    matchTable("Person", rel) && matchTableColumn("id", rel, groupKey)
+                            || matchTable("Auction", rel) && matchTableColumn("seller", rel, groupKey)
+            ) {
+                return 1000.0;
+            }
+            return null;
+        }
+
+        private static boolean matchTable(String table, BeamIOSourceRel rel) {
+            return Arrays.asList("beam", table).equals(rel.getTable().getQualifiedName());
+        }
+
+        private static boolean matchTableColumn(String column, BeamIOSourceRel rel, ImmutableBitSet groupKey) {
+            return ImmutableBitSet.of(rel.getBeamSqlTable().getSchema().indexOf(column)).equals(groupKey);
+        }
+    }
+
+    public enum SelectivityHandler implements MetadataHandler<BuiltInMetadata.Selectivity> {
+        INSTANCE;
+        public static final RelMetadataProvider PROVIDER =
+                ReflectiveRelMetadataProvider.reflectiveSource(BuiltInMethod.SELECTIVITY.method, INSTANCE);
+
+        @Override
+        public MetadataDef<BuiltInMetadata.Selectivity> getDef() {
+            return BuiltInMetadata.Selectivity.DEF;
+        }
+
+        // https://github.com/apache/calcite/blob/d9a81b88ad561e7e4cedae93e805e0d7a53a7f1a/core/src/main/java/org/apache/calcite/rel/metadata/RelMdSelectivity.java#L148
+        @SuppressWarnings("UnusedDeclaration")
+        public Double getSelectivity(Join rel, RelMetadataQuery mq, RexNode predicate) {
+            // return RelMdSelectivity#getSelectivity;
+            double sel = 1.0D;
+            if (predicate != null && !predicate.isAlwaysTrue()) {
+                double artificialSel = 1.0D;
+
+                for (var conjunction : RelOptUtil.conjunctions(predicate)) {
+                    if (conjunction.getKind() == SqlKind.IS_NOT_NULL) {
+                        sel *= 0.9D;
+                    } else if (conjunction instanceof RexCall && ((RexCall) conjunction).getOperator() == RelMdUtil.ARTIFICIAL_SELECTIVITY_FUNC) {
+                        artificialSel *= RelMdUtil.getSelectivityValue(conjunction);
+                    } else if (conjunction.isA(SqlKind.EQUALS)) {
+                        final var equals = (RexCall) conjunction;
+                        final var uniqueLeft = uniqueValues(rel, mq, equals.getOperands().get(0));
+                        final var uniqueRight = uniqueValues(rel, mq, equals.getOperands().get(1));
+                        if (uniqueLeft != null && uniqueRight != null) {
+                            sel *= Double.min(uniqueLeft, uniqueRight) / uniqueLeft / uniqueRight;
+                        } else {
+                            sel *= 0.15D;
+                        }
+                    } else if (conjunction.isA(SqlKind.COMPARISON)) {
+                        sel *= 0.5D;
+                    } else {
+                        sel *= 0.25D;
+                    }
+                }
+
+                return sel * artificialSel;
+            } else {
+                return sel;
+            }
+        }
+
+        private Double uniqueValues(Join rel, RelMetadataQuery mq, RexNode node) {
+            if (node instanceof RexInputRef) {
+                final var inputRef = (RexInputRef) node;
+                final var leftFieldCount = rel.getLeft().getRowType().getFieldCount();
+                if (inputRef.getIndex() < leftFieldCount) {
+                    return mq.getDistinctRowCount(rel.getLeft(), ImmutableBitSet.builder().set(inputRef.getIndex()).build(), null);
+                } else {
+                    return mq.getDistinctRowCount(rel.getRight(), ImmutableBitSet.builder().set(inputRef.getIndex() - leftFieldCount).build(), null);
+                }
+            }
+            return null;
+        }
     }
 
     // It needs to be public so that the generated code in Calcite can access it.
