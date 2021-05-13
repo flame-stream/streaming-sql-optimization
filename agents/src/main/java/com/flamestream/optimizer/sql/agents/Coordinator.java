@@ -1,5 +1,8 @@
 package com.flamestream.optimizer.sql.agents;
 
+import org.apache.beam.sdk.extensions.sql.impl.ParseException;
+import org.apache.beam.sdk.extensions.sql.impl.QueryPlanner;
+import org.apache.beam.sdk.extensions.sql.impl.rel.BeamRelNode;
 import org.apache.beam.sdk.io.UnboundedSource;
 import org.apache.beam.sdk.transforms.Combine;
 import org.apache.beam.sdk.transforms.PTransform;
@@ -17,9 +20,9 @@ interface Coordinator {
     Planner getPlanner();
     CostEstimator getCostEstimator();
 
-    QueryContext start(QueryJob queryJob);
+    QueryContext start(SqlQueryJob sqlQueryJob);
 
-    interface QueryJob {
+    interface SqlQueryJob {
         String query();
         Stream<PTransform<PCollection<Row>, PDone>> outputs();
     }
@@ -34,7 +37,7 @@ interface Coordinator {
         QueryJobBuilder registerUdf(String functionName, Class<?> clazz, String method);
         QueryJobBuilder registerUdaf(String functionName, Combine.CombineFn combineFn);
 
-        QueryJob build(String query);
+        SqlQueryJob build(String query);
     }
 
     interface QueryContext {
