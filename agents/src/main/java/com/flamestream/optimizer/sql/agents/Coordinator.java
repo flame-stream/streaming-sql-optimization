@@ -17,9 +17,6 @@ interface Coordinator {
         registerInput(String tag, UnboundedSource<Row, @NonNullType ? extends UnboundedSource.CheckpointMark> source);
     Stream<UnboundedSource<Row, @NonNullType ? extends UnboundedSource.CheckpointMark>> inputs();
 
-    Planner getPlanner();
-    CostEstimator getCostEstimator();
-
     QueryContext start(SqlQueryJob sqlQueryJob);
 
     interface SqlQueryJob {

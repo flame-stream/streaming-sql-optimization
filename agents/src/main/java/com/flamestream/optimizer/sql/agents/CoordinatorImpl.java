@@ -56,16 +56,6 @@ public class CoordinatorImpl implements Coordinator {
     }
 
     @Override
-    public Planner getPlanner() {
-        return planner;
-    }
-
-    @Override
-    public CostEstimator getCostEstimator() {
-        return estimator;
-    }
-
-    @Override
     public QueryContext start(SqlQueryJob sqlQueryJob) {
         PTransform<@NonNullType PInput, @NonNullType PCollection<Row>> sqlTransform =
                 resolveQuery(sqlQueryJob, ImmutableList.of());
@@ -100,8 +90,8 @@ public class CoordinatorImpl implements Coordinator {
             updateSqlTransform(String query, ImmutableList<RelMetadataProvider> providers) {
         // here our planner implementation should give new graph
         BeamRelNode newGraph = queryPlanner.convertToBeamRel(query, QueryPlanner.QueryParameters.ofNone());
-        RelOptCost newGraphCost = getCostEstimator().getNonCumulativeCost(newGraph, RelMetadataQuery.instance());
-        RelOptCost oldGraphCost = getCostEstimator().getNonCumulativeCost(currentGraph, RelMetadataQuery.instance());
+        RelOptCost newGraphCost = estimator.getNonCumulativeCost(newGraph, RelMetadataQuery.instance());
+        RelOptCost oldGraphCost = estimator.getNonCumulativeCost(currentGraph, RelMetadataQuery.instance());
         if (isDifferenceProfitable(newGraphCost, oldGraphCost)) {
             return new PTransform<>() {
                 @Override
