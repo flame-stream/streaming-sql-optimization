@@ -40,6 +40,8 @@ import org.joda.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Map;
+
 import static org.apache.beam.sdk.nexmark.counting.SqlCounter.applyCounting;
 import static org.apache.beam.sdk.nexmark.counting.SqlCounter.applyCountingVer2;
 
@@ -66,7 +68,13 @@ public class SqlQuery16 extends NexmarkQueryTransform<Latency> {
         super("SqlQuery16");
 
         this.configuration = configuration;
-        query = NexmarkSqlTransform.query(QUERY_1).withQueryPlannerClass(NexmarkQueryPlanner.class);
+        query = NexmarkSqlTransform.query(QUERY_1).withQueryPlannerClass(NexmarkQueryPlanner.class)
+                .withNamedParameters(Map.ofEntries(
+                        Map.entry("table_column_distinct_row_count:Bid.auction", 100),
+                        Map.entry("table_column_distinct_row_count:Auction.id", 100),
+                        Map.entry("table_column_distinct_row_count:Person.id", 1000),
+                        Map.entry("table_column_distinct_row_count:Auction.seller", 1000)
+                ));
     }
 
     @Override

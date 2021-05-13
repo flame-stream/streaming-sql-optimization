@@ -59,6 +59,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * The core component to handle through a SQL statement, from explain execution plan, to generate a
@@ -181,7 +182,7 @@ public class NexmarkQueryPlanner implements QueryPlanner {
                     .setMetadataProvider(
                             ChainedRelMetadataProvider.of(
                                     ImmutableList.of(
-                                            DistinctRowCountHandler.PROVIDER,
+                                            DistinctRowCountHandler.provider(queryParameters),
                                             SelectivityHandler.PROVIDER,
                                             NonCumulativeCostImpl.SOURCE,
                                             RelMdNodeStats.SOURCE,
@@ -202,10 +203,19 @@ public class NexmarkQueryPlanner implements QueryPlanner {
         return beamRelNode;
     }
 
-    public enum DistinctRowCountHandler implements MetadataHandler<BuiltInMetadata.DistinctRowCount> {
-        INSTANCE;
-        public static final RelMetadataProvider PROVIDER =
-                ReflectiveRelMetadataProvider.reflectiveSource(BuiltInMethod.DISTINCT_ROW_COUNT.method, INSTANCE);
+    public static class DistinctRowCountHandler implements MetadataHandler<BuiltInMetadata.DistinctRowCount> {
+        private final QueryParameters queryParameters;
+
+        public DistinctRowCountHandler(QueryParameters queryParameters) {
+            this.queryParameters = queryParameters;
+        }
+
+        public static RelMetadataProvider provider(QueryParameters queryParameters) {
+            return ReflectiveRelMetadataProvider.reflectiveSource(
+                    BuiltInMethod.DISTINCT_ROW_COUNT.method,
+                    new DistinctRowCountHandler(queryParameters)
+            );
+        }
 
         @Override
         public MetadataDef<BuiltInMetadata.DistinctRowCount> getDef() {
@@ -233,27 +243,17 @@ public class NexmarkQueryPlanner implements QueryPlanner {
 
         @SuppressWarnings("UnusedDeclaration")
         public Double getDistinctRowCount(BeamIOSourceRel rel, RelMetadataQuery mq, ImmutableBitSet groupKey, RexNode predicate) {
-            if (
-                    matchTable("Bid", rel) && matchTableColumn("auction", rel, groupKey)
-                            || matchTable("Auction", rel) && matchTableColumn("id", rel, groupKey)
-            ) {
-                return 100.0;
-            }
-            if (
-                    matchTable("Person", rel) && matchTableColumn("id", rel, groupKey)
-                            || matchTable("Auction", rel) && matchTableColumn("seller", rel, groupKey)
-            ) {
-                return 1000.0;
+            if ((predicate == null || predicate.isAlwaysTrue()) && groupKey.size() == 1) {
+                final var distinctRowCount =
+                        queryParameters.named().get("table_column_distinct_row_count:" + Stream.concat(
+                                rel.getTable().getQualifiedName().stream(),
+                                Stream.of(rel.getBeamSqlTable().getSchema().nameOf(groupKey.nextSetBit(0)))
+                        ).collect(Collectors.joining(".")));
+                if (distinctRowCount instanceof Number) {
+                    return ((Number) distinctRowCount).doubleValue();
+                }
             }
             return null;
-        }
-
-        private static boolean matchTable(String table, BeamIOSourceRel rel) {
-            return Arrays.asList("beam", table).equals(rel.getTable().getQualifiedName());
-        }
-
-        private static boolean matchTableColumn(String column, BeamIOSourceRel rel, ImmutableBitSet groupKey) {
-            return ImmutableBitSet.of(rel.getBeamSqlTable().getSchema().indexOf(column)).equals(groupKey);
         }
     }
 

@@ -42,6 +42,8 @@ import org.joda.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Map;
+
 public class SqlQuery18 extends NexmarkQueryTransform<ReceiveArrivalTimes> {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(SqlQuery18.class);
@@ -61,7 +63,13 @@ public class SqlQuery18 extends NexmarkQueryTransform<ReceiveArrivalTimes> {
         super("SqlQuery18");
 
         this.configuration = configuration;
-        query = NexmarkSqlTransform.query(SIMPLE_QUERY).withQueryPlannerClass(NexmarkQueryPlanner.class);
+        query = NexmarkSqlTransform.query(SIMPLE_QUERY).withQueryPlannerClass(NexmarkQueryPlanner.class)
+                .withNamedParameters(Map.ofEntries(
+                        Map.entry("table_column_distinct_row_count:Bid.auction", 100),
+                        Map.entry("table_column_distinct_row_count:Auction.id", 100),
+                        Map.entry("table_column_distinct_row_count:Person.id", 1000),
+                        Map.entry("table_column_distinct_row_count:Auction.seller", 1000)
+                ));
     }
 
     @Override

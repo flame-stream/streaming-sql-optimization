@@ -47,6 +47,8 @@ import org.joda.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Map;
+
 import static org.apache.beam.sdk.nexmark.counting.SqlCounter.auction_count_query;
 import static org.apache.beam.sdk.nexmark.counting.SqlCounter.bid_count_query;
 
@@ -103,7 +105,13 @@ public class SqlQuery19 extends NexmarkQueryTransform<ReceiveArrivalTimes> {
         super("SqlQuery19");
 
         this.configuration = configuration;
-        query = NexmarkSqlTransform.query(SIMPLE_QUERY).withQueryPlannerClass(NexmarkQueryPlanner.class);
+        query = NexmarkSqlTransform.query(SIMPLE_QUERY).withQueryPlannerClass(NexmarkQueryPlanner.class)
+                .withNamedParameters(Map.ofEntries(
+                        Map.entry("table_column_distinct_row_count:Bid.auction", 100),
+                        Map.entry("table_column_distinct_row_count:Auction.id", 100),
+                        Map.entry("table_column_distinct_row_count:Person.id", 1000),
+                        Map.entry("table_column_distinct_row_count:Auction.seller", 1000)
+                ));
 //        person_count_query = NexmarkSqlTransform.query(QUERY_COUNT_PERSON).withQueryPlannerClass(CalciteQueryPlanner.class);
 //        auction_count_query = NexmarkSqlTransform.query(QUERY_COUNT_AUCTION).withQueryPlannerClass(CalciteQueryPlanner.class);
 //        bid_count_query = NexmarkSqlTransform.query(QUERY_COUNT_BID).withQueryPlannerClass(CalciteQueryPlanner.class);
