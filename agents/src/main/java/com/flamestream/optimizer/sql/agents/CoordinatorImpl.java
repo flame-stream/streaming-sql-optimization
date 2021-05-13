@@ -98,7 +98,7 @@ public class CoordinatorImpl implements Coordinator {
 
     private PTransform<@NonNullType PInput, @NonNullType PCollection<Row>>
             updateSqlTransform(String query, ImmutableList<RelMetadataProvider> providers) {
-        // here out planner implementation should give new graph
+        // here our planner implementation should give new graph
         BeamRelNode newGraph = queryPlanner.convertToBeamRel(query, QueryPlanner.QueryParameters.ofNone());
         RelOptCost newGraphCost = getCostEstimator().getNonCumulativeCost(newGraph, RelMetadataQuery.instance());
         RelOptCost oldGraphCost = getCostEstimator().getNonCumulativeCost(currentGraph, RelMetadataQuery.instance());
