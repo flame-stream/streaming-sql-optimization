@@ -20,7 +20,6 @@ import org.checkerframework.checker.nullness.compatqual.NonNullType;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.UnknownKeyFor;
 
-import java.nio.channels.Pipe;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Stream;
@@ -82,6 +81,7 @@ public class CoordinatorImpl implements Coordinator {
     }
 
     private void tryNewGraph(SqlQueryJob sqlQueryJob) {
+        // here we need to give list of providers to newSqlTransform method
         PTransform<@NonNullType PInput, @NonNullType PCollection<Row>> newSqlTransform =
                 updateSqlTransform(sqlQueryJob.query(), ImmutableList.of());
         if (newSqlTransform != null) {
@@ -91,12 +91,14 @@ public class CoordinatorImpl implements Coordinator {
     }
 
     private boolean isDifferenceProfitable(RelOptCost newGraphCost, RelOptCost oldGraphCost) {
+        // here we need to decide to change graph or not
         // TODO
         return true;
     }
 
     private PTransform<@NonNullType PInput, @NonNullType PCollection<Row>>
             updateSqlTransform(String query, ImmutableList<RelMetadataProvider> providers) {
+        // here out planner implementation should give new graph
         BeamRelNode newGraph = queryPlanner.convertToBeamRel(query, QueryPlanner.QueryParameters.ofNone());
         RelOptCost newGraphCost = getCostEstimator().getNonCumulativeCost(newGraph, RelMetadataQuery.instance());
         RelOptCost oldGraphCost = getCostEstimator().getNonCumulativeCost(currentGraph, RelMetadataQuery.instance());
