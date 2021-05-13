@@ -114,11 +114,6 @@ public class CoordinatorImpl implements Coordinator {
         return null;
     }
 
-    /** Resolve SQL query without using statistics. Uses SqlTransform.query method with Calcite planner.
-     *
-     * @param sqlQueryJob QueryJob to resolve
-     * @return SqlTransform of this QueryJob
-     */
     private PTransform<@NonNullType PInput, @NonNullType PCollection<Row>>
             resolveQuery(SqlQueryJob sqlQueryJob, ImmutableList<RelMetadataProvider> providers) {
         return SqlTransform
