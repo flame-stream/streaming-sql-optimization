@@ -5,15 +5,16 @@ import org.apache.beam.sdk.Pipeline;
 import org.apache.beam.sdk.extensions.sql.SqlTransform;
 import org.apache.beam.sdk.extensions.sql.impl.CalciteQueryPlanner;
 import org.apache.beam.sdk.extensions.sql.impl.QueryPlanner;
+import org.apache.beam.sdk.extensions.sql.impl.planner.BeamCostModel;
 import org.apache.beam.sdk.extensions.sql.impl.rel.BeamRelNode;
 import org.apache.beam.sdk.extensions.sql.impl.rel.BeamSqlRelUtils;
 import org.apache.beam.sdk.io.Read;
 import org.apache.beam.sdk.io.UnboundedSource;
 import org.apache.beam.sdk.transforms.PTransform;
 import org.apache.beam.sdk.values.*;
+import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.plan.RelOptCost;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rel.metadata.RelMetadataProvider;
-import org.apache.calcite.plan.RelOptCost;
-import org.apache.calcite.rel.metadata.RelMetadataQuery;
+import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rel.metadata.RelMetadataQuery;
 import org.apache.calcite.tools.Planner;
 import org.checkerframework.checker.initialization.qual.Initialized;
 import org.checkerframework.checker.nullness.compatqual.NonNullType;
@@ -81,17 +82,16 @@ public class CoordinatorImpl implements Coordinator {
     }
 
     private boolean isDifferenceProfitable(RelOptCost newGraphCost, RelOptCost oldGraphCost) {
-        // here we need to decide to change graph or not
-        // TODO
-        return true;
+        // logic to decide if graph changing is profitable
+        return oldGraphCost.isLt(newGraphCost);
     }
 
     private PTransform<@NonNullType PInput, @NonNullType PCollection<Row>>
             updateSqlTransform(String query, ImmutableList<RelMetadataProvider> providers) {
         // here our planner implementation should give new graph
         BeamRelNode newGraph = queryPlanner.convertToBeamRel(query, QueryPlanner.QueryParameters.ofNone());
-        RelOptCost newGraphCost = estimator.getNonCumulativeCost(newGraph, RelMetadataQuery.instance());
-        RelOptCost oldGraphCost = estimator.getNonCumulativeCost(currentGraph, RelMetadataQuery.instance());
+        RelOptCost newGraphCost = estimator.getCumulativeCost(newGraph, providers, RelMetadataQuery.instance());
+        RelOptCost oldGraphCost = estimator.getCumulativeCost(currentGraph, providers, RelMetadataQuery.instance());
         if (isDifferenceProfitable(newGraphCost, oldGraphCost)) {
             return new PTransform<>() {
                 @Override
