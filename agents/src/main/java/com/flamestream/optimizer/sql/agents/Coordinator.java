@@ -1,14 +1,10 @@
 package com.flamestream.optimizer.sql.agents;
 
-import org.apache.beam.sdk.extensions.sql.impl.ParseException;
-import org.apache.beam.sdk.extensions.sql.impl.QueryPlanner;
-import org.apache.beam.sdk.extensions.sql.impl.rel.BeamRelNode;
 import org.apache.beam.sdk.io.UnboundedSource;
 import org.apache.beam.sdk.transforms.Combine;
 import org.apache.beam.sdk.transforms.PTransform;
 import org.apache.beam.sdk.transforms.SerializableFunction;
 import org.apache.beam.sdk.values.*;
-import org.apache.calcite.tools.Planner;
 import org.checkerframework.checker.nullness.compatqual.NonNullType;
 import java.util.stream.Stream;
 
