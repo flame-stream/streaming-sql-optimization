@@ -17,6 +17,7 @@
  */
 package org.apache.beam.sdk.extensions.sql.impl;
 
+import com.google.common.collect.Iterables;
 import org.apache.beam.sdk.extensions.sql.impl.JdbcConnection;
 import org.apache.beam.sdk.extensions.sql.impl.ParseException;
 import org.apache.beam.sdk.extensions.sql.impl.QueryPlanner;
@@ -38,6 +39,7 @@ import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rel.RelNode;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rel.RelRoot;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rel.core.Join;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rel.metadata.*;
+import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rel.rules.*;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rex.RexCall;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rex.RexInputRef;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rex.RexNode;
@@ -83,7 +85,11 @@ public class ModifiedCalciteQueryPlanner implements QueryPlanner {
      */
     public ModifiedCalciteQueryPlanner(JdbcConnection connection, Collection<RuleSet> ruleSets) {
         this.connection = connection;
-        this.planner = Frameworks.getPlanner(defaultConfig(connection, ruleSets));
+        this.planner = Frameworks.getPlanner(defaultConfig(connection, ruleSets.stream().map(ruleSet ->
+                RuleSets.ofList(Iterables.filter(ruleSet, rule ->
+                        !(rule instanceof JoinAssociateRule || rule instanceof JoinPushThroughJoinRule)
+                ))
+        ).collect(Collectors.toList())));
     }
 
     public static final Factory FACTORY =
