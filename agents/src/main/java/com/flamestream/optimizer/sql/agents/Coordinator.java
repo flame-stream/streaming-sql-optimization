@@ -1,15 +1,15 @@
 package com.flamestream.optimizer.sql.agents;
 
-import org.apache.beam.sdk.extensions.sql.impl.ParseException;
-import org.apache.beam.sdk.extensions.sql.impl.QueryPlanner;
-import org.apache.beam.sdk.extensions.sql.impl.rel.BeamRelNode;
 import org.apache.beam.sdk.io.UnboundedSource;
 import org.apache.beam.sdk.transforms.Combine;
 import org.apache.beam.sdk.transforms.PTransform;
 import org.apache.beam.sdk.transforms.SerializableFunction;
-import org.apache.beam.sdk.values.*;
-import org.apache.calcite.tools.Planner;
+import org.apache.beam.sdk.values.PCollection;
+import org.apache.beam.sdk.values.PDone;
+import org.apache.beam.sdk.values.Row;
 import org.checkerframework.checker.nullness.compatqual.NonNullType;
+import org.checkerframework.checker.nullness.qual.NonNull;
+
 import java.util.stream.Stream;
 
 interface Coordinator {
@@ -25,14 +25,14 @@ interface Coordinator {
     }
 
     interface QueryJobBuilder {
-        QueryJobBuilder addOutput(PTransform<PCollection<Row>, PDone> sink);
+        QueryJobBuilder addOutput(PTransform<@NonNull PCollection<Row>, @NonNull PDone> sink);
 
-        QueryJobBuilder setPreHook(PTransform<PCollection<Row>, PCollection<Row>> hook);
-        QueryJobBuilder setPostHook(PTransform<PCollection<Row>, PCollection<Row>> hook);
+        QueryJobBuilder setPreHook(PTransform<@NonNull PCollection<Row>, @NonNull PCollection<Row>> hook);
+        QueryJobBuilder setPostHook(PTransform<@NonNull PCollection<Row>, @NonNull PCollection<Row>> hook);
 
-        QueryJobBuilder registerUdf(String functionName, SerializableFunction sfn);
+        QueryJobBuilder registerUdf(String functionName, SerializableFunction<?, ?> sfn);
         QueryJobBuilder registerUdf(String functionName, Class<?> clazz, String method);
-        QueryJobBuilder registerUdaf(String functionName, Combine.CombineFn combineFn);
+        QueryJobBuilder registerUdf(String functionName, Combine.CombineFn<?, ?, ?> combineFn);
 
         SqlQueryJob build(String query);
     }
