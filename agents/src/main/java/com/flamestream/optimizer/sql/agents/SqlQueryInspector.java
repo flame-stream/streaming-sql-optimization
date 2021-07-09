@@ -10,15 +10,18 @@ import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rex.RexNode;
 import java.util.HashMap;
 
 public class SqlQueryInspector {
-    public HashMap<RelNode, Integer> inspectQuery(RelNode root) {
-        var map = new HashMap<RelNode, Integer>();
+    public HashMap<RelNode, String> inspectQuery(RelNode root) {
+        var map = new HashMap<RelNode, String>();
         inspectSubquery(root, map);
         return map;
     }
 
-    private void inspectSubquery(RelNode node, HashMap<RelNode, Integer> map) {
+    private void inspectSubquery(RelNode node, HashMap<RelNode, String> map) {
         if (node instanceof BeamJoinRel) {
             var joinInput = (BeamJoinRel) node;
+
+            var left = joinInput.getLeft();
+            var right = joinInput.getRight();
 
             var condition = joinInput.getCondition();
             RexCall conditionCall;
@@ -34,6 +37,8 @@ public class SqlQueryInspector {
                 first = operands.get(0);
                 second = operands.get(1);
 
+                left.getTable().getRelOptSchema();
+
                 if (first instanceof RexInputRef && second instanceof RexInputRef) {
                     firstRexInput = (RexInputRef) first;
                     secondRexInput = (RexInputRef) second;
@@ -44,21 +49,16 @@ public class SqlQueryInspector {
                 throw new RuntimeException("Bad JOIN condition");
             }
 
-            var left = joinInput.getLeft();
-            var right = joinInput.getRight();
-
-            map.put(left, firstRexInput.getIndex());
-            map.put(right, secondRexInput.getIndex());
-
+            var fieldsList = joinInput.getRowType().getFieldList();
 
             if (left instanceof BeamIOSourceRel) {
-                // left is a non-recursive subquery
+                map.put(left, fieldsList.get(firstRexInput.getIndex()).getName());
             } else {
                 inspectSubquery(left, map);
             }
 
             if (right instanceof BeamIOSourceRel) {
-                // right is a non-recursive subquery
+                map.put(right, fieldsList.get(secondRexInput.getIndex()).getName());
             } else {
                 inspectSubquery(right, map);
             }

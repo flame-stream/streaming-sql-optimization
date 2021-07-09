@@ -11,6 +11,7 @@ public class SqlQueryInspectorTest {
         var relNode = OptimizerTestUtils.getSecondQueryPlan();
         var sqlQueryInspector = new SqlQueryInspector();
         var res = sqlQueryInspector.inspectQuery(relNode);
-        Assert.assertEquals(4, res.size());
+        Assert.assertEquals(3, res.size());
+        System.out.println(res);
     }
 }

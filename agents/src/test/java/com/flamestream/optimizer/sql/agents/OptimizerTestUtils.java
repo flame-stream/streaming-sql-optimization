@@ -52,7 +52,6 @@ public class OptimizerTestUtils {
 
 
     public static BeamRelNode getNEXMarkQueryPlan(String query) {
-        var estimator = new CostEstimatorImpl();
         var p = Pipeline.create();
 
         String name = "Test";

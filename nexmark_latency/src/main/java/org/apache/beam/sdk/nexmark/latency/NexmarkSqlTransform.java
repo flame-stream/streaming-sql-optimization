@@ -28,6 +28,7 @@ import org.apache.beam.sdk.values.Row;
 import org.apache.beam.sdk.values.TupleTag;
 import org.apache.beam.vendor.calcite.v1_20_0.com.google.common.collect.ImmutableList;
 import org.apache.beam.vendor.calcite.v1_20_0.com.google.common.collect.ImmutableMap;
+import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rel.metadata.ChainedRelMetadataProvider;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.MoreObjects;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -89,8 +90,11 @@ public abstract class NexmarkSqlTransform extends PTransform<PInput, PCollection
         sqlEnvBuilder.setPipelineOptions(input.getPipeline().getOptions());
 
         BeamSqlEnv sqlEnv = sqlEnvBuilder.build();
+
+        var beamRelNode = sqlEnv.parseQuery(queryString(), queryParameters());
+
         return BeamSqlRelUtils.toPCollection(
-                input.getPipeline(), sqlEnv.parseQuery(queryString(), queryParameters()));
+                input.getPipeline(), beamRelNode);
     }
 
     @SuppressWarnings("unchecked")

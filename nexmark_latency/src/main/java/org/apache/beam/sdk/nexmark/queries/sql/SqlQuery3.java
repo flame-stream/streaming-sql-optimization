@@ -18,7 +18,7 @@
 package org.apache.beam.sdk.nexmark.queries.sql;
 
 import org.apache.beam.sdk.extensions.sql.SqlTransform;
-import org.apache.beam.sdk.extensions.sql.impl.CalciteQueryPlanner;
+import org.apache.beam.sdk.extensions.sql.impl.UpdatedCalciteQueryPlanner;
 import org.apache.beam.sdk.extensions.sql.impl.QueryPlanner;
 import org.apache.beam.sdk.extensions.sql.zetasql.ZetaSQLQueryPlanner;
 import org.apache.beam.sdk.nexmark.NexmarkConfiguration;
@@ -91,7 +91,7 @@ public class SqlQuery3 extends NexmarkQueryTransform<NameCityStateId> {
   }
 
   public static SqlQuery3 calciteSqlQuery3(NexmarkConfiguration configuration) {
-    return new SqlQuery3("SqlQuery3", configuration, CalciteQueryPlanner.class);
+    return new SqlQuery3("SqlQuery3", configuration, UpdatedCalciteQueryPlanner.class);
   }
 
   public static SqlQuery3 zetaSqlQuery3(NexmarkConfiguration configuration) {

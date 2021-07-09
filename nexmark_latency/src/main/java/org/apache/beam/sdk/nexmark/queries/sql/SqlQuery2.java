@@ -18,7 +18,7 @@
 package org.apache.beam.sdk.nexmark.queries.sql;
 
 import org.apache.beam.sdk.extensions.sql.SqlTransform;
-import org.apache.beam.sdk.extensions.sql.impl.CalciteQueryPlanner;
+import org.apache.beam.sdk.extensions.sql.impl.UpdatedCalciteQueryPlanner;
 import org.apache.beam.sdk.extensions.sql.impl.QueryPlanner;
 import org.apache.beam.sdk.extensions.sql.zetasql.ZetaSQLQueryPlanner;
 import org.apache.beam.sdk.nexmark.model.AuctionPrice;
@@ -58,7 +58,7 @@ public class SqlQuery2 extends NexmarkQueryTransform<AuctionPrice> {
   }
 
   public static SqlQuery2 calciteSqlQuery2(long skipFactor) {
-    return new SqlQuery2("SqlQuery2", skipFactor, CalciteQueryPlanner.class);
+    return new SqlQuery2("SqlQuery2", skipFactor, UpdatedCalciteQueryPlanner.class);
   }
 
   public static SqlQuery2 zetaSqlQuery2(long skipFactor) {
