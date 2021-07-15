@@ -8,6 +8,10 @@ import org.apache.beam.sdk.values.*;
 import org.checkerframework.checker.nullness.compatqual.NonNullType;
 import java.util.stream.Stream;
 
+/**
+ * Interface for main agent of optimization, that coordinates pipeline running
+ * and decides if the graph changing is needed using handled stats.
+ */
 interface Coordinator {
     UnboundedSource<Row, @NonNullType ? extends UnboundedSource.CheckpointMark>
         registerInput(String tag, UnboundedSource<Row, @NonNullType ? extends UnboundedSource.CheckpointMark> source);

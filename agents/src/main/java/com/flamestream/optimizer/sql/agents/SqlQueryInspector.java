@@ -13,6 +13,9 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Set;
 
+/**
+ * Util for parse SQL query to know interesting streams fields for stats handling
+ */
 public class SqlQueryInspector {
     public HashMap<RelNode, Set<String>> inspectQuery(RelNode root) {
         var map = new HashMap<RelNode, Set<String>>();

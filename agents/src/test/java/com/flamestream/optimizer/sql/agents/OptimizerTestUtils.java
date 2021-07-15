@@ -95,11 +95,11 @@ public class OptimizerTestUtils {
                 .setRowSchema(auctionsWithReceiveTime)
                 .setRowSchema(auctionsWithReceiveTime);
 
-        Schema peoplesWithReceiveTime = Schema.builder()
+        Schema peopleWithReceiveTime = Schema.builder()
                 .addFields(people.getSchema().getFields()).build();
         people = people
-                .setRowSchema(peoplesWithReceiveTime)
-                .setRowSchema(peoplesWithReceiveTime);
+                .setRowSchema(peopleWithReceiveTime)
+                .setRowSchema(peopleWithReceiveTime);
 
         Schema bidsWithReceiveTime = Schema.builder()
                 .addFields(bids.getSchema().getFields()).build();
@@ -118,8 +118,7 @@ public class OptimizerTestUtils {
         ImmutableMap.Builder<String, BeamSqlTable> tables = ImmutableMap.builder();
         for (Map.Entry<TupleTag<?>, PValue> input : withTags.expand().entrySet()) {
             PCollection<?> pCollection = (PCollection<?>) input.getValue();
-            BeamPCollectionTable<?> table;
-            table = new BeamPCollectionTable(pCollection);
+            var table = new BeamPCollectionTable<>(pCollection);
             tables.put(input.getKey().getId(), table);
         }
 
