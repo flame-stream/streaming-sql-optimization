@@ -1,17 +1,17 @@
 package com.flamestream.optimizer.sql.agents;
 
-import org.apache.beam.sdk.extensions.sql.impl.ParseException;
-import org.apache.beam.sdk.extensions.sql.impl.QueryPlanner;
-import org.apache.beam.sdk.extensions.sql.impl.rel.BeamRelNode;
 import org.apache.beam.sdk.io.UnboundedSource;
 import org.apache.beam.sdk.transforms.Combine;
 import org.apache.beam.sdk.transforms.PTransform;
 import org.apache.beam.sdk.transforms.SerializableFunction;
 import org.apache.beam.sdk.values.*;
-import org.apache.calcite.tools.Planner;
 import org.checkerframework.checker.nullness.compatqual.NonNullType;
 import java.util.stream.Stream;
 
+/**
+ * Interface for main agent of optimization, that coordinates pipeline running
+ * and decides if the graph changing is needed using handled stats.
+ */
 interface Coordinator {
     UnboundedSource<Row, @NonNullType ? extends UnboundedSource.CheckpointMark>
         registerInput(String tag, UnboundedSource<Row, @NonNullType ? extends UnboundedSource.CheckpointMark> source);

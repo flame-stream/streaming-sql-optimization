@@ -70,7 +70,7 @@ public class SqlBoundedSideInputJoin extends NexmarkQueryTransform<Bid> {
     return new SqlBoundedSideInputJoin(
         "SqlBoundedSideInputJoin",
         configuration,
-        CalciteQueryPlanner.class,
+            CalciteQueryPlanner.class,
         "WITH bid_with_side (auction, bidder, price, dateTime, extra, side_id) AS (%n"
             + "  SELECT *, CAST(MOD(bidder, %d) AS BIGINT) side_id FROM bid%n"
             + ")%n"

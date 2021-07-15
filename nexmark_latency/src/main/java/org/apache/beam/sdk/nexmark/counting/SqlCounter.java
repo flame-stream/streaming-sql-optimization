@@ -1,7 +1,6 @@
 package org.apache.beam.sdk.nexmark.counting;
 
 import org.apache.beam.sdk.extensions.sql.impl.CalciteQueryPlanner;
-import org.apache.beam.sdk.io.TextIO;
 import org.apache.beam.sdk.nexmark.NexmarkConfiguration;
 import org.apache.beam.sdk.nexmark.latency.NexmarkSqlTransform;
 import org.apache.beam.sdk.nexmark.utils.LoggingDoFn;
