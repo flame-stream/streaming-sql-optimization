@@ -22,7 +22,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import org.apache.beam.sdk.coders.Coder;
 import org.apache.beam.sdk.extensions.sql.SqlTransform;
-import org.apache.beam.sdk.extensions.sql.impl.UpdatedCalciteQueryPlanner;
+import org.apache.beam.sdk.extensions.sql.impl.CalciteQueryPlanner;
 import org.apache.beam.sdk.extensions.sql.impl.QueryPlanner;
 import org.apache.beam.sdk.extensions.sql.zetasql.ZetaSQLQueryPlanner;
 import org.apache.beam.sdk.metrics.Counter;
@@ -67,7 +67,7 @@ public class SqlQuery0 extends NexmarkQueryTransform<Bid> {
   }
 
   public static SqlQuery0 calciteSqlQuery0() {
-    return new SqlQuery0("SqlQuery0", UpdatedCalciteQueryPlanner.class);
+    return new SqlQuery0("SqlQuery0", CalciteQueryPlanner.class);
   }
 
   @Override

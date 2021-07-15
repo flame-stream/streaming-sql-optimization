@@ -20,7 +20,7 @@ package org.apache.beam.sdk.nexmark.queries.sql;
 import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkState;
 
 import org.apache.beam.sdk.extensions.sql.SqlTransform;
-import org.apache.beam.sdk.extensions.sql.impl.UpdatedCalciteQueryPlanner;
+import org.apache.beam.sdk.extensions.sql.impl.CalciteQueryPlanner;
 import org.apache.beam.sdk.extensions.sql.impl.QueryPlanner;
 import org.apache.beam.sdk.extensions.sql.zetasql.ZetaSQLQueryPlanner;
 import org.apache.beam.sdk.nexmark.NexmarkConfiguration;
@@ -70,7 +70,7 @@ public class SqlBoundedSideInputJoin extends NexmarkQueryTransform<Bid> {
     return new SqlBoundedSideInputJoin(
         "SqlBoundedSideInputJoin",
         configuration,
-        UpdatedCalciteQueryPlanner.class,
+            CalciteQueryPlanner.class,
         "WITH bid_with_side (auction, bidder, price, dateTime, extra, side_id) AS (%n"
             + "  SELECT *, CAST(MOD(bidder, %d) AS BIGINT) side_id FROM bid%n"
             + ")%n"

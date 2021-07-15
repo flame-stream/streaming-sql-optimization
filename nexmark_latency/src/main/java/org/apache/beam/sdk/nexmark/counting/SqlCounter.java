@@ -1,6 +1,6 @@
 package org.apache.beam.sdk.nexmark.counting;
 
-import org.apache.beam.sdk.extensions.sql.impl.UpdatedCalciteQueryPlanner;
+import org.apache.beam.sdk.extensions.sql.impl.CalciteQueryPlanner;
 import org.apache.beam.sdk.nexmark.NexmarkConfiguration;
 import org.apache.beam.sdk.nexmark.latency.NexmarkSqlTransform;
 import org.apache.beam.sdk.nexmark.utils.LoggingDoFn;
@@ -33,11 +33,11 @@ public class SqlCounter {
                     + "    Bid B";
 
     public static final NexmarkSqlTransform person_count_query =
-            NexmarkSqlTransform.query(QUERY_COUNT_PERSON).withQueryPlannerClass(UpdatedCalciteQueryPlanner.class);
+            NexmarkSqlTransform.query(QUERY_COUNT_PERSON).withQueryPlannerClass(CalciteQueryPlanner.class);
     public static final NexmarkSqlTransform auction_count_query =
-            NexmarkSqlTransform.query(QUERY_COUNT_AUCTION).withQueryPlannerClass(UpdatedCalciteQueryPlanner.class);
+            NexmarkSqlTransform.query(QUERY_COUNT_AUCTION).withQueryPlannerClass(CalciteQueryPlanner.class);
     public static final NexmarkSqlTransform bid_count_query =
-            NexmarkSqlTransform.query(QUERY_COUNT_BID).withQueryPlannerClass(UpdatedCalciteQueryPlanner.class);
+            NexmarkSqlTransform.query(QUERY_COUNT_BID).withQueryPlannerClass(CalciteQueryPlanner.class);
 
     public static void applyCounting(PCollectionTuple withTags, NexmarkConfiguration configuration) {
         PCollection<Row> person_count = withTags.apply(person_count_query);

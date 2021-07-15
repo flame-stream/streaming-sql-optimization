@@ -17,7 +17,7 @@
  */
 package org.apache.beam.sdk.nexmark.queries.sql;
 
-import org.apache.beam.sdk.extensions.sql.impl.UpdatedCalciteQueryPlanner;
+import org.apache.beam.sdk.extensions.sql.impl.CalciteQueryPlanner;
 import org.apache.beam.sdk.nexmark.NexmarkConfiguration;
 import org.apache.beam.sdk.nexmark.latency.AddArrivalTime;
 import org.apache.beam.sdk.nexmark.latency.AddReceiveTime;
@@ -58,7 +58,7 @@ public class SqlQuery18 extends NexmarkQueryTransform<ReceiveArrivalTimes> {
         super("SqlQuery18");
 
         this.configuration = configuration;
-        query = NexmarkSqlTransform.query(SIMPLE_QUERY).withQueryPlannerClass(UpdatedCalciteQueryPlanner.class);
+        query = NexmarkSqlTransform.query(SIMPLE_QUERY).withQueryPlannerClass(CalciteQueryPlanner.class);
     }
 
     @Override
