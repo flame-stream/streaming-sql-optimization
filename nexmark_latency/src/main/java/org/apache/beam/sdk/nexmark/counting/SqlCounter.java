@@ -40,9 +40,9 @@ public class SqlCounter {
             NexmarkSqlTransform.query(QUERY_COUNT_BID).withQueryPlannerClass(CalciteQueryPlanner.class);
 
     public static void applyCounting(PCollectionTuple withTags, NexmarkConfiguration configuration) {
-        PCollection<Row> person_count = withTags.apply(person_count_query);
-        PCollection<Row> auction_count = withTags.apply(auction_count_query);
-        PCollection<Row> bid_count = withTags.apply(bid_count_query);
+        PCollection<Row> person_count = withTags.apply(person_count_query).get(NexmarkSqlTransform.MAIN);
+        PCollection<Row> auction_count = withTags.apply(auction_count_query).get(NexmarkSqlTransform.MAIN);
+        PCollection<Row> bid_count = withTags.apply(bid_count_query).get(NexmarkSqlTransform.MAIN);
 
 //        var directory = configuration.latencyLogDirectory + "_counting";
 //

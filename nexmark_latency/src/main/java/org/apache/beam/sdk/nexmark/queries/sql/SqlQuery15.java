@@ -116,10 +116,11 @@ public class SqlQuery15 extends NexmarkQueryTransform<Latency> {
         rates.put(auctionTag, configuration.nextEventRate * configuration.hotAuctionRatio / 100.0);
         rates.put(personTag, configuration.nextEventRate * configuration.hotSellersRatio / 100.0);
 
-        PCollection<Row> results = PCollectionTuple.of(bidTag, bids)
+        final var output = PCollectionTuple.of(bidTag, bids)
                 .and(auctionTag, auctions)
                 .and(personTag, people)
                 .apply(query.withRates(rates));
+        PCollection<Row> results = output.get(NexmarkSqlTransform.MAIN);
              // .apply(query); // <-- for a run with standard rates
 
         // adding arrival (from join) time for each tuple to be used for latency calculation
@@ -133,6 +134,11 @@ public class SqlQuery15 extends NexmarkQueryTransform<Latency> {
 
         latency.apply(ToString.elements())
                 .apply(TextIO.write().to(configuration.latencyLogDirectory)
+                        .withWindowedWrites()
+                        .withNumShards(1)
+                        .withSuffix(".txt"));
+        output.get(NexmarkSqlTransform.STATS).apply(ToString.elements())
+                .apply(TextIO.write().to("stats")
                         .withWindowedWrites()
                         .withNumShards(1)
                         .withSuffix(".txt"));

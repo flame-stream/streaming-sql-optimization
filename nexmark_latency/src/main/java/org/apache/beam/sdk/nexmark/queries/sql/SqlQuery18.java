@@ -17,7 +17,6 @@
  */
 package org.apache.beam.sdk.nexmark.queries.sql;
 
-import org.apache.beam.sdk.extensions.sql.impl.CalciteQueryPlanner;
 import org.apache.beam.sdk.extensions.sql.impl.NexmarkQueryPlanner;
 import org.apache.beam.sdk.nexmark.NexmarkConfiguration;
 import org.apache.beam.sdk.nexmark.latency.AddArrivalTime;
@@ -125,7 +124,7 @@ public class SqlQuery18 extends NexmarkQueryTransform<ReceiveArrivalTimes> {
         PCollection<Row> results = PCollectionTuple.of(bidTag, bids)
                 .and(auctionTag, auctions)
                 .and(personTag, people)
-                .apply(query); // <-- for a run with standard rates
+                .apply(query).get(NexmarkSqlTransform.MAIN); // <-- for a run with standard rates
 
         // adding arrival (from join) time for each tuple to be used for latency calculation
         Schema withArrivalTime = Schema.builder()

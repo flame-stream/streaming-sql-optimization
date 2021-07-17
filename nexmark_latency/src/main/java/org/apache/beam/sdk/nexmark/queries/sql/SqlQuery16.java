@@ -17,7 +17,6 @@
  */
 package org.apache.beam.sdk.nexmark.queries.sql;
 
-import org.apache.beam.sdk.extensions.sql.impl.CalciteQueryPlanner;
 import org.apache.beam.sdk.extensions.sql.impl.NexmarkQueryPlanner;
 import org.apache.beam.sdk.io.TextIO;
 import org.apache.beam.sdk.nexmark.NexmarkConfiguration;
@@ -38,6 +37,8 @@ import org.joda.time.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+
+import java.util.Map;
 
 import static org.apache.beam.sdk.nexmark.counting.SqlCounter.applyCountingVer2;
 
@@ -64,7 +65,12 @@ public class SqlQuery16 extends NexmarkQueryTransform<Latency> {
         super("SqlQuery16");
 
         this.configuration = configuration;
-        query = NexmarkSqlTransform.query(QUERY_1).withQueryPlannerClass(NexmarkQueryPlanner.class)
+        query = NexmarkSqlTransform.query(QUERY_1, "" +
+                "SELECT person_ids.number, auction_sellers.number, bid_bidders.number" +
+                " FROM (SELECT 0 AS key, COUNT(*) AS number FROM (SELECT DISTINCT id FROM Person)) AS person_ids" +
+                " JOIN (SELECT 0 AS key, COUNT(*) AS number FROM (SELECT DISTINCT seller FROM Auction)) AS auction_sellers ON person_ids.key = auction_sellers.key" +
+                " JOIN (SELECT 0 AS key, COUNT(*) AS number FROM (SELECT DISTINCT bidder FROM Bid)) AS bid_bidders ON auction_sellers.key = bid_bidders.key" +
+                "").withQueryPlannerClass(NexmarkQueryPlanner.class)
                 .withNamedParameters(Map.ofEntries(
                         Map.entry("table_column_distinct_row_count:Bid.auction", 100),
                         Map.entry("table_column_distinct_row_count:Auction.id", 100),
@@ -132,7 +138,8 @@ public class SqlQuery16 extends NexmarkQueryTransform<Latency> {
             applyCountingVer2(withTags, configuration);
         }
 
-        PCollection<Row> results = withTags.apply(query);
+        final var output = withTags.apply(query);
+        PCollection<Row> results = output.get(NexmarkSqlTransform.MAIN);
 
         // adding arrival (from join) time for each tuple to be used for latency calculation
         Schema withArrivalTime = Schema.builder()
@@ -147,6 +154,11 @@ public class SqlQuery16 extends NexmarkQueryTransform<Latency> {
 
         latency.apply(ToString.elements())
                 .apply(TextIO.write().to(configuration.latencyLogDirectory)
+                        .withWindowedWrites()
+                        .withNumShards(1)
+                        .withSuffix(".txt"));
+        output.get(NexmarkSqlTransform.STATS).apply(ToString.elements())
+                .apply(TextIO.write().to("stats")
                         .withWindowedWrites()
                         .withNumShards(1)
                         .withSuffix(".txt"));

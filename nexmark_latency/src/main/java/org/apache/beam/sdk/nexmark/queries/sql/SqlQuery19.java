@@ -17,8 +17,7 @@
  */
 package org.apache.beam.sdk.nexmark.queries.sql;
 
-import org.apache.beam.sdk.extensions.sql.impl.CalciteQueryPlanner;
-
+import org.apache.beam.sdk.extensions.sql.impl.NexmarkQueryPlanner;
 import org.apache.beam.sdk.nexmark.NexmarkConfiguration;
 import org.apache.beam.sdk.nexmark.counting.SqlCounter;
 import org.apache.beam.sdk.nexmark.latency.AddArrivalTime;
@@ -41,6 +40,8 @@ import org.apache.beam.sdk.values.TupleTag;
 import org.joda.time.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.Map;
 
 
 public class SqlQuery19 extends NexmarkQueryTransform<ReceiveArrivalTimes> {
@@ -165,7 +166,7 @@ public class SqlQuery19 extends NexmarkQueryTransform<ReceiveArrivalTimes> {
                 .and(personTag, people);
 
         PCollection<Row> results = withTags
-                .apply(query); // <-- for a run with standard rates
+                .apply(query).get(NexmarkSqlTransform.MAIN); // <-- for a run with standard rates
 
         SqlCounter.applyCounting(withTags, configuration);
 

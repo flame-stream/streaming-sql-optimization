@@ -1,10 +1,12 @@
 package org.apache.beam.sdk.nexmark.latency;
 
 import com.google.auto.value.AutoValue;
+
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
 import org.apache.beam.sdk.annotations.Experimental;
 import org.apache.beam.sdk.extensions.sql.BeamSqlUdf;
 import org.apache.beam.sdk.extensions.sql.impl.BeamSqlEnv;
@@ -42,10 +44,14 @@ import org.checkerframework.checker.nullness.qual.Nullable;
         "rawtypes", // TODO(https://issues.apache.org/jira/browse/BEAM-10556)
         "nullness" // TODO(https://issues.apache.org/jira/browse/BEAM-10402)
 })
-public abstract class NexmarkSqlTransform extends PTransform<PInput, PCollection<Row>> {
+public abstract class NexmarkSqlTransform extends PTransform<PInput, PCollectionTuple> {
     static final String PCOLLECTION_NAME = "PCOLLECTION";
+    public static final TupleTag<Row> MAIN = new TupleTag<>();
+    public static final TupleTag<Row> STATS = new TupleTag<>();
 
     abstract String queryString();
+
+    abstract String statsQuery();
 
     abstract QueryParameters queryParameters();
 
@@ -64,7 +70,7 @@ public abstract class NexmarkSqlTransform extends PTransform<PInput, PCollection
     abstract Map<TupleTag<Row>, Double> rates();
 
     @Override
-    public PCollection<Row> expand(PInput input) {
+    public PCollectionTuple expand(PInput input) {
         BeamSqlEnvBuilder sqlEnvBuilder =
                 BeamSqlEnv.builder(new ReadOnlyTableProvider(PCOLLECTION_NAME, toTableMap(input)));
 
@@ -93,8 +99,14 @@ public abstract class NexmarkSqlTransform extends PTransform<PInput, PCollection
 
         var beamRelNode = sqlEnv.parseQuery(queryString(), queryParameters());
 
-        return BeamSqlRelUtils.toPCollection(
-                input.getPipeline(), beamRelNode);
+        final var main = PCollectionTuple.of(MAIN, BeamSqlRelUtils.toPCollection(input.getPipeline(), beamRelNode));
+        final var statsQuery = statsQuery();
+        if (!statsQuery.isEmpty()) {
+            return main.and(STATS, BeamSqlRelUtils.toPCollection(
+                    input.getPipeline(), sqlEnv.parseQuery(statsQuery, queryParameters())
+            ));
+        }
+        return main;
     }
 
     @SuppressWarnings("unchecked")
@@ -164,15 +176,22 @@ public abstract class NexmarkSqlTransform extends PTransform<PInput, PCollection
      * per-transform with {@link #withQueryPlannerClass(Class<? extends QueryPlanner>)}.
      */
     public static NexmarkSqlTransform query(String queryString) {
-        return builder()
+        return query(queryString, "");
+    }
+
+    public static NexmarkSqlTransform query(String queryString, String statsQuery) {
+        final var builder = builder()
                 .setQueryString(queryString)
                 .setQueryParameters(QueryParameters.ofNone())
                 .setUdafDefinitions(Collections.emptyList())
                 .setUdfDefinitions(Collections.emptyList())
                 .setTableProviderMap(Collections.emptyMap())
                 .setAutoUdfUdafLoad(false)
-                .setRates(Collections.emptyMap())
-                .build();
+                .setRates(Collections.emptyMap());
+        if (statsQuery != null) {
+            builder.setStatsQuery(statsQuery);
+        }
+        return builder.build();
     }
 
     public NexmarkSqlTransform withTableProvider(String name, TableProvider tableProvider) {
@@ -232,7 +251,9 @@ public abstract class NexmarkSqlTransform extends PTransform<PInput, PCollection
         return toBuilder().setUdfDefinitions(newUdfDefinitions).build();
     }
 
-    /** register a {@link Combine.CombineFn} as UDAF function used in this query. */
+    /**
+     * register a {@link Combine.CombineFn} as UDAF function used in this query.
+     */
     public NexmarkSqlTransform registerUdaf(String functionName, Combine.CombineFn combineFn) {
         ImmutableList<NexmarkSqlTransform.UdafDefinition> newUdafs =
                 ImmutableList.<NexmarkSqlTransform.UdafDefinition>builder()
@@ -252,6 +273,8 @@ public abstract class NexmarkSqlTransform extends PTransform<PInput, PCollection
     @AutoValue.Builder
     abstract static class Builder {
         abstract NexmarkSqlTransform.Builder setQueryString(String queryString);
+
+        abstract NexmarkSqlTransform.Builder setStatsQuery(String statsQuery);
 
         abstract NexmarkSqlTransform.Builder setQueryParameters(QueryParameters queryParameters);
 
