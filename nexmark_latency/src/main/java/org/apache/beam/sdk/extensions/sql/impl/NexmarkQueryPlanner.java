@@ -17,7 +17,6 @@
  */
 package org.apache.beam.sdk.extensions.sql.impl;
 
-import org.apache.beam.sdk.extensions.sql.impl.QueryPlanner.QueryParameters.Kind;
 import org.apache.beam.sdk.extensions.sql.impl.planner.BeamCostModel;
 import org.apache.beam.sdk.extensions.sql.impl.planner.RelMdNodeStats;
 import org.apache.beam.sdk.extensions.sql.impl.rel.BeamIOSourceRel;
@@ -50,11 +49,9 @@ import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.tools.*;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.util.BuiltInMethod;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.util.ImmutableBitSet;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.util.NumberUtil;
-import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -156,9 +153,6 @@ public class NexmarkQueryPlanner implements QueryPlanner {
     @Override
     public BeamRelNode convertToBeamRel(String sqlStatement, QueryParameters queryParameters)
             throws ParseException, SqlConversionException {
-        Preconditions.checkArgument(
-                queryParameters.getKind() == Kind.NONE,
-                "Beam SQL Calcite dialect does not yet support query parameters.");
         BeamRelNode beamRelNode;
         try {
             SqlNode parsed = planner.parse(sqlStatement);
