@@ -1,5 +1,8 @@
-package com.flamestream.optimizer.sql.agents;
+package com.flamestream.optimizer.sql.agents.impl;
 
+import com.flamestream.optimizer.sql.agents.Coordinator;
+import com.flamestream.optimizer.sql.agents.CostEstimator;
+import com.flamestream.optimizer.sql.agents.Executor;
 import com.google.common.collect.ImmutableList;
 import org.apache.beam.sdk.Pipeline;
 import org.apache.beam.sdk.extensions.sql.SqlTransform;
@@ -20,8 +23,11 @@ import org.checkerframework.checker.nullness.compatqual.NonNullType;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.UnknownKeyFor;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 import java.util.stream.Stream;
 
 @SuppressWarnings({
@@ -34,6 +40,7 @@ public class CoordinatorImpl implements Coordinator {
     private final QueryPlanner queryPlanner;
     private final CostEstimator estimator;
     private final Executor executor;
+    private final List<RunningSqlQueryJob> runningJobs = new ArrayList<>();
     private BeamRelNode currentGraph = null;
 
     public CoordinatorImpl(Planner planner, QueryPlanner queryPlanner, CostEstimator estimator, Executor executor) {
@@ -45,7 +52,7 @@ public class CoordinatorImpl implements Coordinator {
 
     @Override
     public UnboundedSource<Row, @NonNullType ? extends UnboundedSource.CheckpointMark>
-        registerInput(String tag, UnboundedSource<Row, @NonNullType ? extends UnboundedSource.CheckpointMark> source) {
+    registerInput(String tag, UnboundedSource<Row, @NonNullType ? extends UnboundedSource.CheckpointMark> source) {
         sourcesMap.put(tag, source);
         return source;
     }
@@ -56,18 +63,35 @@ public class CoordinatorImpl implements Coordinator {
     }
 
     @Override
-    public QueryContext start(SqlQueryJob sqlQueryJob) {
+    public RunningSqlQueryJob start(SqlQueryJob sqlQueryJob) {
         PTransform<@NonNullType PInput, @NonNullType PCollection<Row>> sqlTransform =
                 resolveQuery(sqlQueryJob, ImmutableList.of());
 
         Pipeline pipeline = createPipeline(sqlQueryJob, sqlTransform);
         executor.startOrUpdate(pipeline, null);
-        return new QueryContext() {
+        final RunningSqlQueryJob runningSqlQueryJob = new RunningSqlQueryJob() {
             @Override
-            public void stop() {
-                // TODO
+            public SqlQueryJob queryJob() {
+                return sqlQueryJob;
+            }
+
+            @Override
+            public void addPerformanceStatsListener(Consumer<PerformanceQueryStat> consumer) {
+                // TODO: 7/17/21 implement me
             }
         };
+        runningJobs.add(runningSqlQueryJob);
+        return runningSqlQueryJob;
+    }
+
+    @Override
+    public void stop(RunningSqlQueryJob runningSqlQueryJob) {
+        // TODO: 7/17/21 implement me
+    }
+
+    @Override
+    public Stream<RunningSqlQueryJob> runningJobs() {
+        return runningJobs.stream();
     }
 
     private void tryNewGraph(SqlQueryJob sqlQueryJob) {
@@ -86,7 +110,7 @@ public class CoordinatorImpl implements Coordinator {
     }
 
     private PTransform<@NonNullType PInput, @NonNullType PCollection<Row>>
-            updateSqlTransform(String query, ImmutableList<RelMetadataProvider> providers) {
+    updateSqlTransform(String query, ImmutableList<RelMetadataProvider> providers) {
         // here our planner implementation should give new graph
         BeamRelNode newGraph = queryPlanner.convertToBeamRel(query, QueryPlanner.QueryParameters.ofNone());
         RelOptCost newGraphCost = estimator.getCumulativeCost(newGraph, providers, RelMetadataQuery.instance());
@@ -104,7 +128,7 @@ public class CoordinatorImpl implements Coordinator {
     }
 
     private PTransform<@NonNullType PInput, @NonNullType PCollection<Row>>
-            resolveQuery(SqlQueryJob sqlQueryJob, ImmutableList<RelMetadataProvider> providers) {
+    resolveQuery(SqlQueryJob sqlQueryJob, ImmutableList<RelMetadataProvider> providers) {
         return SqlTransform
                 .query(sqlQueryJob.query())
                 .withQueryPlannerClass(CalciteQueryPlanner.class);

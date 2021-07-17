@@ -1,5 +1,6 @@
 package com.flamestream.optimizer.sql.agents;
 
+import com.flamestream.optimizer.sql.agents.impl.CostEstimatorImpl;
 import com.google.common.collect.ImmutableList;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rel.metadata.JaninoRelMetadataProvider;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rel.metadata.RelMetadataQuery;

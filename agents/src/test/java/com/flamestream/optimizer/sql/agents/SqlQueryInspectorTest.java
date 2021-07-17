@@ -1,5 +1,6 @@
 package com.flamestream.optimizer.sql.agents;
 
+import com.flamestream.optimizer.sql.agents.impl.SqlQueryInspector;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.plan.RelOptTable;
 import org.junit.Test;
 

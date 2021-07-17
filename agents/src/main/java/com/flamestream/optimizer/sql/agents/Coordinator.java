@@ -6,22 +6,35 @@ import org.apache.beam.sdk.transforms.PTransform;
 import org.apache.beam.sdk.transforms.SerializableFunction;
 import org.apache.beam.sdk.values.*;
 import org.checkerframework.checker.nullness.compatqual.NonNullType;
+
+import java.util.function.Consumer;
 import java.util.stream.Stream;
 
 /**
  * Interface for main agent of optimization, that coordinates pipeline running
  * and decides if the graph changing is needed using handled stats.
  */
-interface Coordinator {
+public interface Coordinator {
     UnboundedSource<Row, @NonNullType ? extends UnboundedSource.CheckpointMark>
         registerInput(String tag, UnboundedSource<Row, @NonNullType ? extends UnboundedSource.CheckpointMark> source);
     Stream<UnboundedSource<Row, @NonNullType ? extends UnboundedSource.CheckpointMark>> inputs();
 
-    QueryContext start(SqlQueryJob sqlQueryJob);
+    RunningSqlQueryJob start(SqlQueryJob sqlQueryJob);
+    void stop(RunningSqlQueryJob runningSqlQueryJob);
+    Stream<RunningSqlQueryJob> runningJobs();
 
     interface SqlQueryJob {
         String query();
         Stream<PTransform<PCollection<Row>, PDone>> outputs();
+    }
+
+    interface RunningSqlQueryJob {
+        SqlQueryJob queryJob();
+        void addPerformanceStatsListener(Consumer<PerformanceQueryStat> consumer);
+    }
+
+    interface PerformanceQueryStat {
+        // TODO: 7/17/21 add latency and throughput
     }
 
     interface QueryJobBuilder {
@@ -35,10 +48,5 @@ interface Coordinator {
         QueryJobBuilder registerUdaf(String functionName, Combine.CombineFn combineFn);
 
         SqlQueryJob build(String query);
-    }
-
-    interface QueryContext {
-//        void addStatsListener(Consumer<QueryStatistics> consumer);
-        void stop();
     }
 }

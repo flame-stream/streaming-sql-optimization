@@ -1,4 +1,4 @@
-package com.flamestream.optimizer.sql.agents;
+package com.flamestream.optimizer.sql.agents.impl;
 
 import org.apache.beam.sdk.extensions.sql.impl.rel.BeamCalcRel;
 import org.apache.beam.sdk.extensions.sql.impl.rel.BeamIOSourceRel;

@@ -1,5 +1,6 @@
-package com.flamestream.optimizer.sql.agents;
+package com.flamestream.optimizer.sql.agents.impl;
 
+import com.flamestream.optimizer.sql.agents.CostEstimator;
 import com.google.common.collect.ImmutableList;
 import org.apache.beam.sdk.extensions.sql.impl.ModifiedCalciteQueryPlanner;
 import org.apache.beam.sdk.extensions.sql.impl.planner.RelMdNodeStats;
