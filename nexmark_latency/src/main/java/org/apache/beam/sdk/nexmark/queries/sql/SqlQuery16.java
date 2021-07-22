@@ -30,13 +30,13 @@ import org.apache.beam.sdk.nexmark.model.sql.SelectEvent;
 import org.apache.beam.sdk.nexmark.queries.NexmarkQueryTransform;
 import org.apache.beam.sdk.schemas.Schema;
 import org.apache.beam.sdk.transforms.*;
+import org.apache.beam.sdk.transforms.windowing.BoundedWindow;
 import org.apache.beam.sdk.transforms.windowing.FixedWindows;
 import org.apache.beam.sdk.transforms.windowing.Window;
 import org.apache.beam.sdk.values.*;
 import org.joda.time.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 
 import java.util.Map;
 
@@ -49,13 +49,19 @@ public class SqlQuery16 extends NexmarkQueryTransform<Latency> {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(SqlQuery16.class);
 
-    private static final String QUERY_1 =
-            ""
-                + " SELECT "
-                + "    B.receiveTime AS timestamp1, A.receiveTime AS timestamp2, P.receiveTime AS timestamp3"
-                + " FROM "
-                + "    Auction A INNER JOIN Person P on A.seller = P.id "
-                + "       INNER JOIN Bid B on B.bidder = P.id";
+    private static final String QUERY_1 = ""
+            + " SELECT "
+            + "    B.receiveTime AS timestamp1, A.receiveTime AS timestamp2, P.receiveTime AS timestamp3"
+            + " FROM "
+            + "    Auction A INNER JOIN Person P on A.seller = P.id "
+            + "       INNER JOIN Bid B on B.bidder = P.id" +
+            "";
+    private static final String STATS_QUERY = "" +
+            "SELECT person_ids.number, auction_sellers.number, bid_bidders.number" +
+            " FROM (SELECT 0 AS key, COUNT(*) AS number FROM (SELECT DISTINCT bidder FROM Bid)) AS bid_bidders" +
+            " JOIN (SELECT 0 AS key, COUNT(*) AS number FROM (SELECT DISTINCT id FROM Person)) AS person_ids ON bid_bidders.key = person_ids.key " +
+            " JOIN (SELECT 0 AS key, COUNT(*) AS number FROM (SELECT DISTINCT seller FROM Auction)) AS auction_sellers ON person_ids.key = auction_sellers.key" +
+            "";
 
     private final NexmarkSqlTransform query;
 
@@ -65,15 +71,9 @@ public class SqlQuery16 extends NexmarkQueryTransform<Latency> {
         super("SqlQuery16");
 
         this.configuration = configuration;
-        query = NexmarkSqlTransform.query(QUERY_1, "" +
-                "SELECT person_ids.number, auction_sellers.number, bid_bidders.number" +
-                " FROM (SELECT 0 AS key, COUNT(*) AS number FROM (SELECT DISTINCT id FROM Person)) AS person_ids" +
-                " JOIN (SELECT 0 AS key, COUNT(*) AS number FROM (SELECT DISTINCT seller FROM Auction)) AS auction_sellers ON person_ids.key = auction_sellers.key" +
-                " JOIN (SELECT 0 AS key, COUNT(*) AS number FROM (SELECT DISTINCT bidder FROM Bid)) AS bid_bidders ON auction_sellers.key = bid_bidders.key" +
-                "").withQueryPlannerClass(NexmarkQueryPlanner.class)
+        query = NexmarkSqlTransform.query(QUERY_1, STATS_QUERY).withQueryPlannerClass(NexmarkQueryPlanner.class)
                 .withNamedParameters(Map.ofEntries(
-                        Map.entry("table_column_distinct_row_count:Bid.auction", 100),
-                        Map.entry("table_column_distinct_row_count:Auction.id", 100),
+                        Map.entry("table_column_distinct_row_count:Bid.bidder", 100),
                         Map.entry("table_column_distinct_row_count:Person.id", 1000),
                         Map.entry("table_column_distinct_row_count:Auction.seller", 1000)
                 ));
@@ -157,13 +157,27 @@ public class SqlQuery16 extends NexmarkQueryTransform<Latency> {
                         .withWindowedWrites()
                         .withNumShards(1)
                         .withSuffix(".txt"));
-        output.get(NexmarkSqlTransform.STATS).apply(ToString.elements())
-                .apply(TextIO.write().to("stats")
-                        .withWindowedWrites()
-                        .withNumShards(1)
-                        .withSuffix(".txt"));
+        output.get(NexmarkSqlTransform.STATS).apply(new Output());
 
         return latency;
+    }
+
+    public static class Output extends PTransform<PCollection<Row>, PDone> {
+        @Override
+        public PDone expand(PCollection<Row> input) {
+            input.apply(ParDo.of(new DoFn<Row, Void>() {
+                @ProcessElement
+                public void processElement(ProcessContext c, BoundedWindow window) {
+                    NexmarkSqlTransform.query(QUERY_1, STATS_QUERY).withQueryPlannerClass(NexmarkQueryPlanner.class)
+                            .withNamedParameters(Map.ofEntries(
+                                    Map.entry("table_column_distinct_row_count:Bid.bidder", c.element().getInt64(0)),
+                                    Map.entry("table_column_distinct_row_count:Person.id", c.element().getInt64(1)),
+                                    Map.entry("table_column_distinct_row_count:Auction.seller", c.element().getInt64(2))
+                            ));
+                }
+            }));
+            return PDone.in(input.getPipeline());
+        }
     }
 }
 
