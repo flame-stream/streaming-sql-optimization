@@ -301,9 +301,9 @@ public class NexmarkQueryPlanner implements QueryPlanner {
                 final var inputRef = (RexInputRef) node;
                 final var leftFieldCount = rel.getLeft().getRowType().getFieldCount();
                 if (inputRef.getIndex() < leftFieldCount) {
-                    return mq.getDistinctRowCount(rel.getLeft(), ImmutableBitSet.builder().set(inputRef.getIndex()).build(), null);
+                    return mq.getDistinctRowCount(rel.getLeft(), ImmutableBitSet.of(inputRef.getIndex()), null);
                 } else {
-                    return mq.getDistinctRowCount(rel.getRight(), ImmutableBitSet.builder().set(inputRef.getIndex() - leftFieldCount).build(), null);
+                    return mq.getDistinctRowCount(rel.getRight(), ImmutableBitSet.of(inputRef.getIndex() - leftFieldCount), null);
                 }
             }
             return null;
