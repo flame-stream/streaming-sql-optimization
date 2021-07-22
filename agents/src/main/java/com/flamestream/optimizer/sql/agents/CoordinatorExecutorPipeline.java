@@ -1,35 +1,23 @@
 package com.flamestream.optimizer.sql.agents;
 
-import org.apache.beam.sdk.Pipeline;
-import org.apache.beam.sdk.extensions.sql.impl.QueryPlanner;
 import org.apache.beam.sdk.transforms.DoFn;
-import org.apache.beam.sdk.transforms.PTransform;
-import org.apache.beam.sdk.transforms.ParDo;
-import org.apache.beam.sdk.values.PBegin;
-import org.apache.beam.sdk.values.PCollection;
-import org.apache.calcite.tools.Planner;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.Collection;
 
 public class CoordinatorExecutorPipeline {
-    public static void fromUserQuerySource(
-            final @NonNull Pipeline pipeline,
-            final Planner planner, // could possibly be removed in the near future
-            final QueryPlanner queryPlanner,
+    public static void fromUserQuery(
             final CostEstimator costEstimator,
-            final @NonNull PTransform<@NonNull ? super PBegin, @NonNull PCollection<Coordinator.SqlQueryJob>> userQuerySource,
-            final @NonNull Collection<UserSource> inputs) {
-
-        final PCollection<Coordinator.SqlQueryJob> queries = pipeline.apply("ReadQuery", userQuerySource);
+            final @NonNull Collection<UserSource> inputs,
+            final Coordinator.SqlQueryJob job) {
 
         final Executor executor = new ExecutorImpl();
-        final Coordinator coordinator = new CoordinatorImpl(planner, queryPlanner, costEstimator, executor);
+        final Coordinator coordinator = new CoordinatorImpl(costEstimator, executor);
         for (UserSource input : inputs) {
             coordinator.registerInput(input.getTag(), input.getSource());
         }
 
-        queries.apply("SubmitToCoordinator", ParDo.of(new CoordinatorExecutorDoFn(coordinator)));
+        coordinator.start(job);
     }
 }
 

@@ -1,11 +1,11 @@
 package com.flamestream.optimizer.sql.agents.impl;
 
+import com.flamestream.optimizer.sql.agents.util.SqlTransform;
 import com.flamestream.optimizer.sql.agents.Coordinator;
 import com.flamestream.optimizer.sql.agents.CostEstimator;
 import com.flamestream.optimizer.sql.agents.Executor;
 import com.google.common.collect.ImmutableList;
 import org.apache.beam.sdk.Pipeline;
-import org.apache.beam.sdk.extensions.sql.SqlTransform;
 import org.apache.beam.sdk.extensions.sql.impl.CalciteQueryPlanner;
 import org.apache.beam.sdk.extensions.sql.impl.QueryPlanner;
 import org.apache.beam.sdk.extensions.sql.impl.rel.BeamRelNode;
@@ -13,17 +13,20 @@ import org.apache.beam.sdk.extensions.sql.impl.rel.BeamSqlRelUtils;
 import org.apache.beam.sdk.io.Read;
 import org.apache.beam.sdk.io.UnboundedSource;
 import org.apache.beam.sdk.transforms.PTransform;
-import org.apache.beam.sdk.values.*;
+import org.apache.beam.sdk.values.PCollection;
+import org.apache.beam.sdk.values.PCollectionTuple;
+import org.apache.beam.sdk.values.PInput;
+import org.apache.beam.sdk.values.Row;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.plan.RelOptCost;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rel.metadata.RelMetadataProvider;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rel.metadata.RelMetadataQuery;
-import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.tools.Planner;
 import org.checkerframework.checker.initialization.qual.Initialized;
 import org.checkerframework.checker.nullness.compatqual.NonNullType;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.UnknownKeyFor;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -36,16 +39,12 @@ import java.util.stream.Stream;
 public class CoordinatorImpl implements Coordinator {
     private final HashMap<String, UnboundedSource<Row, @NonNullType ? extends UnboundedSource.CheckpointMark>>
             sourcesMap = new HashMap<>();
-    private final Planner planner;
-    private final QueryPlanner queryPlanner;
     private final CostEstimator estimator;
     private final Executor executor;
     private final List<RunningSqlQueryJob> runningJobs = new ArrayList<>();
     private BeamRelNode currentGraph = null;
 
-    public CoordinatorImpl(Planner planner, QueryPlanner queryPlanner, CostEstimator estimator, Executor executor) {
-        this.planner = planner;
-        this.queryPlanner = queryPlanner;
+    public CoordinatorImpl(CostEstimator estimator, Executor executor) {
         this.estimator = estimator;
         this.executor = executor;
     }
@@ -112,23 +111,25 @@ public class CoordinatorImpl implements Coordinator {
     private PTransform<@NonNullType PInput, @NonNullType PCollection<Row>>
     updateSqlTransform(String query, ImmutableList<RelMetadataProvider> providers) {
         // here our planner implementation should give new graph
-        BeamRelNode newGraph = queryPlanner.convertToBeamRel(query, QueryPlanner.QueryParameters.ofNone());
-//        RelOptCost newGraphCost = estimator.getCumulativeCost(newGraph, providers, RelMetadataQuery.instance());
-//        RelOptCost oldGraphCost = estimator.getCumulativeCost(currentGraph, providers, RelMetadataQuery.instance());
-//        if (isDifferenceProfitable(newGraphCost, oldGraphCost)) {
-//            return new PTransform<>() {
-//                @Override
-//                public @UnknownKeyFor @NonNull @Initialized PCollection<Row> expand(PInput input) {
-//                    return BeamSqlRelUtils.toPCollection(
-//                            input.getPipeline(), newGraph);
-//                }
-//            };
-//        }
+        /*BeamRelNode newGraph = queryPlanner.convertToBeamRel(query, QueryPlanner.QueryParameters.ofNone());
+        RelOptCost newGraphCost = estimator.getCumulativeCost(newGraph, providers, RelMetadataQuery.instance());
+        RelOptCost oldGraphCost = estimator.getCumulativeCost(currentGraph, providers, RelMetadataQuery.instance());
+        if (isDifferenceProfitable(newGraphCost, oldGraphCost)) {
+            return new PTransform<>() {
+                @Override
+                public @UnknownKeyFor @NonNull @Initialized PCollection<Row> expand(PInput input) {
+                    return BeamSqlRelUtils.toPCollection(
+                            input.getPipeline(), newGraph);
+                }
+            };
+        }*/
         return null;
     }
 
     private PTransform<@NonNullType PInput, @NonNullType PCollection<Row>>
     resolveQuery(SqlQueryJob sqlQueryJob, ImmutableList<RelMetadataProvider> providers) {
+    private SqlTransform
+            resolveQuery(SqlQueryJob sqlQueryJob, ImmutableList<RelMetadataProvider> providers) {
         return SqlTransform
                 .query(sqlQueryJob.query())
                 .withQueryPlannerClass(CalciteQueryPlanner.class);
