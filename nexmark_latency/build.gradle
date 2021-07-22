@@ -58,7 +58,6 @@ configurations {
 }
 
 dependencies {
-  implementation project(":agents")
   testCompile group: 'junit', name: 'junit', version: '4.12'
   compile 'org.apache.kafka:kafka-clients:2.4.1'
   implementation 'org.apache.beam:beam-vendor-guava-26_0-jre:0.1'
