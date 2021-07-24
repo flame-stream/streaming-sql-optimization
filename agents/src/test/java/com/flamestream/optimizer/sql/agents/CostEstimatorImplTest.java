@@ -1,10 +1,5 @@
 package com.flamestream.optimizer.sql.agents;
 
-import com.google.api.services.bigquery.model.QueryParameter;
-import com.google.common.collect.ImmutableList;
-import org.apache.beam.sdk.extensions.sql.impl.QueryPlanner;
-import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rel.metadata.JaninoRelMetadataProvider;
-import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rel.metadata.RelMetadataQuery;
 import org.junit.Test;
 
 import java.util.Map;
