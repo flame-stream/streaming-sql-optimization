@@ -1,20 +1,12 @@
 package org.apache.beam.sdk.nexmark.latency;
 
 import com.google.auto.value.AutoValue;
-
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
 import org.apache.beam.sdk.annotations.Experimental;
 import org.apache.beam.sdk.extensions.sql.BeamSqlUdf;
 import org.apache.beam.sdk.extensions.sql.impl.BeamSqlEnv;
 import org.apache.beam.sdk.extensions.sql.impl.BeamSqlEnv.BeamSqlEnvBuilder;
 import org.apache.beam.sdk.extensions.sql.impl.BeamSqlPipelineOptions;
 import org.apache.beam.sdk.extensions.sql.impl.QueryPlanner;
-import org.apache.beam.sdk.extensions.sql.impl.QueryPlanner.QueryParameters;
-import org.apache.beam.sdk.extensions.sql.impl.rel.BeamSqlRelUtils;
 import org.apache.beam.sdk.extensions.sql.impl.schema.BeamPCollectionTable;
 import org.apache.beam.sdk.extensions.sql.meta.BeamSqlTable;
 import org.apache.beam.sdk.extensions.sql.meta.provider.ReadOnlyTableProvider;
@@ -22,20 +14,20 @@ import org.apache.beam.sdk.extensions.sql.meta.provider.TableProvider;
 import org.apache.beam.sdk.transforms.Combine;
 import org.apache.beam.sdk.transforms.PTransform;
 import org.apache.beam.sdk.transforms.SerializableFunction;
-import org.apache.beam.sdk.values.PCollection;
-import org.apache.beam.sdk.values.PCollectionTuple;
-import org.apache.beam.sdk.values.PInput;
-import org.apache.beam.sdk.values.PValue;
-import org.apache.beam.sdk.values.Row;
-import org.apache.beam.sdk.values.TupleTag;
+import org.apache.beam.sdk.values.*;
 import org.apache.beam.vendor.calcite.v1_20_0.com.google.common.collect.ImmutableList;
 import org.apache.beam.vendor.calcite.v1_20_0.com.google.common.collect.ImmutableMap;
-import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rel.metadata.ChainedRelMetadataProvider;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.MoreObjects;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+
 /**
- * This is a copy of {@code SqlTransform} but with rates or potentially any other statistics.
+ * This is a copy of {@code SqlTransform} but with rates or potentially any other statistics and without query string and parameters.
  */
 @AutoValue
 @Experimental
@@ -44,16 +36,8 @@ import org.checkerframework.checker.nullness.qual.Nullable;
         "rawtypes", // TODO(https://issues.apache.org/jira/browse/BEAM-10556)
         "nullness" // TODO(https://issues.apache.org/jira/browse/BEAM-10402)
 })
-public abstract class NexmarkSqlTransform extends PTransform<PInput, PCollectionTuple> {
+public abstract class NexmarkSqlEnv implements Function<PInput, BeamSqlEnv> {
     static final String PCOLLECTION_NAME = "PCOLLECTION";
-    public static final TupleTag<Row> MAIN = new TupleTag<>();
-    public static final TupleTag<Row> STATS = new TupleTag<>();
-
-    abstract String queryString();
-
-    abstract String statsQuery();
-
-    abstract QueryParameters queryParameters();
 
     abstract List<UdfDefinition> udfDefinitions();
 
@@ -70,7 +54,7 @@ public abstract class NexmarkSqlTransform extends PTransform<PInput, PCollection
     abstract Map<TupleTag<Row>, Double> rates();
 
     @Override
-    public PCollectionTuple expand(PInput input) {
+    public BeamSqlEnv apply(PInput input) {
         BeamSqlEnvBuilder sqlEnvBuilder =
                 BeamSqlEnv.builder(new ReadOnlyTableProvider(PCOLLECTION_NAME, toTableMap(input)));
 
@@ -95,18 +79,7 @@ public abstract class NexmarkSqlTransform extends PTransform<PInput, PCollection
 
         sqlEnvBuilder.setPipelineOptions(input.getPipeline().getOptions());
 
-        BeamSqlEnv sqlEnv = sqlEnvBuilder.build();
-
-        var beamRelNode = sqlEnv.parseQuery(queryString(), queryParameters());
-
-        final var main = PCollectionTuple.of(MAIN, BeamSqlRelUtils.toPCollection(input.getPipeline(), beamRelNode));
-        final var statsQuery = statsQuery();
-        if (!statsQuery.isEmpty()) {
-            return main.and(STATS, BeamSqlRelUtils.toPCollection(
-                    input.getPipeline(), sqlEnv.parseQuery(statsQuery, queryParameters())
-            ));
-        }
-        return main;
+        return sqlEnvBuilder.build();
     }
 
     @SuppressWarnings("unchecked")
@@ -148,9 +121,9 @@ public abstract class NexmarkSqlTransform extends PTransform<PInput, PCollection
     }
 
     /**
-     * Returns a {@link NexmarkSqlTransform} representing an equivalent execution plan.
+     * Returns a {@link NexmarkSqlEnv} representing an equivalent execution plan.
      *
-     * <p>The {@link NexmarkSqlTransform} can be applied to a {@link PCollection} or {@link PCollectionTuple}
+     * <p>The {@link NexmarkSqlEnv} can be applied to a {@link PCollection} or {@link PCollectionTuple}
      * representing all the input tables.
      *
      * <p>The {@link PTransform} outputs a {@link PCollection} of {@link Row}.
@@ -171,56 +144,38 @@ public abstract class NexmarkSqlTransform extends PTransform<PInput, PCollection
      * </ul>
      *
      * <p>Any available implementation of {@link QueryPlanner} can be used as the query planner in
-     * {@link NexmarkSqlTransform}. An implementation can be specified globally for the entire pipeline with
+     * {@link NexmarkSqlEnv}. An implementation can be specified globally for the entire pipeline with
      * {@link BeamSqlPipelineOptions#getPlannerName()}. The global planner can be overridden
      * per-transform with {@link #withQueryPlannerClass(Class<? extends QueryPlanner>)}.
      */
-    public static NexmarkSqlTransform query(String queryString) {
-        return query(queryString, "");
-    }
-
-    public static NexmarkSqlTransform query(String queryString, String statsQuery) {
-        final var builder = builder()
-                .setQueryString(queryString)
-                .setQueryParameters(QueryParameters.ofNone())
+    public static NexmarkSqlEnv build() {
+        return builder()
                 .setUdafDefinitions(Collections.emptyList())
                 .setUdfDefinitions(Collections.emptyList())
                 .setTableProviderMap(Collections.emptyMap())
                 .setAutoUdfUdafLoad(false)
-                .setRates(Collections.emptyMap());
-        if (statsQuery != null) {
-            builder.setStatsQuery(statsQuery);
-        }
-        return builder.build();
+                .setRates(Collections.emptyMap()).build();
     }
 
-    public NexmarkSqlTransform withTableProvider(String name, TableProvider tableProvider) {
+    public NexmarkSqlEnv withTableProvider(String name, TableProvider tableProvider) {
         Map<String, TableProvider> map = new HashMap<>(tableProviderMap());
         map.put(name, tableProvider);
         return toBuilder().setTableProviderMap(ImmutableMap.copyOf(map)).build();
     }
 
-    public NexmarkSqlTransform withDefaultTableProvider(String name, TableProvider tableProvider) {
+    public NexmarkSqlEnv withDefaultTableProvider(String name, TableProvider tableProvider) {
         return withTableProvider(name, tableProvider).toBuilder().setDefaultTableProvider(name).build();
     }
 
-    public NexmarkSqlTransform withQueryPlannerClass(Class<? extends QueryPlanner> clazz) {
+    public NexmarkSqlEnv withQueryPlannerClass(Class<? extends QueryPlanner> clazz) {
         return toBuilder().setQueryPlannerClassName(clazz.getName()).build();
     }
 
-    public NexmarkSqlTransform withNamedParameters(Map<String, ?> parameters) {
-        return toBuilder().setQueryParameters(QueryParameters.ofNamed(parameters)).build();
-    }
-
-    public NexmarkSqlTransform withPositionalParameters(List<?> parameters) {
-        return toBuilder().setQueryParameters(QueryParameters.ofPositional(parameters)).build();
-    }
-
-    public NexmarkSqlTransform withAutoUdfUdafLoad(boolean autoUdfUdafLoad) {
+    public NexmarkSqlEnv withAutoUdfUdafLoad(boolean autoUdfUdafLoad) {
         return toBuilder().setAutoUdfUdafLoad(autoUdfUdafLoad).build();
     }
 
-    public NexmarkSqlTransform withRates(Map<TupleTag<Row>, Double> rates) {
+    public NexmarkSqlEnv withRates(Map<TupleTag<Row>, Double> rates) {
         return toBuilder().setRates(rates).build();
     }
 
@@ -229,7 +184,7 @@ public abstract class NexmarkSqlTransform extends PTransform<PInput, PCollection
      *
      * <p>Refer to {@link BeamSqlUdf} for more about how to implement a UDF in BeamSql.
      */
-    public NexmarkSqlTransform registerUdf(String functionName, Class<? extends BeamSqlUdf> clazz) {
+    public NexmarkSqlEnv registerUdf(String functionName, Class<? extends BeamSqlUdf> clazz) {
         return registerUdf(functionName, clazz, BeamSqlUdf.UDF_METHOD);
     }
 
@@ -237,15 +192,15 @@ public abstract class NexmarkSqlTransform extends PTransform<PInput, PCollection
      * Register {@link SerializableFunction} as a UDF function used in this query. Note, {@link
      * SerializableFunction} must have a constructor without arguments.
      */
-    public NexmarkSqlTransform registerUdf(String functionName, SerializableFunction sfn) {
+    public NexmarkSqlEnv registerUdf(String functionName, SerializableFunction sfn) {
         return registerUdf(functionName, sfn.getClass(), "apply");
     }
 
-    private NexmarkSqlTransform registerUdf(String functionName, Class<?> clazz, String method) {
-        ImmutableList<NexmarkSqlTransform.UdfDefinition> newUdfDefinitions =
-                ImmutableList.<NexmarkSqlTransform.UdfDefinition>builder()
+    private NexmarkSqlEnv registerUdf(String functionName, Class<?> clazz, String method) {
+        ImmutableList<NexmarkSqlEnv.UdfDefinition> newUdfDefinitions =
+                ImmutableList.<NexmarkSqlEnv.UdfDefinition>builder()
                         .addAll(udfDefinitions())
-                        .add(NexmarkSqlTransform.UdfDefinition.of(functionName, clazz, method))
+                        .add(NexmarkSqlEnv.UdfDefinition.of(functionName, clazz, method))
                         .build();
 
         return toBuilder().setUdfDefinitions(newUdfDefinitions).build();
@@ -254,45 +209,39 @@ public abstract class NexmarkSqlTransform extends PTransform<PInput, PCollection
     /**
      * register a {@link Combine.CombineFn} as UDAF function used in this query.
      */
-    public NexmarkSqlTransform registerUdaf(String functionName, Combine.CombineFn combineFn) {
-        ImmutableList<NexmarkSqlTransform.UdafDefinition> newUdafs =
-                ImmutableList.<NexmarkSqlTransform.UdafDefinition>builder()
+    public NexmarkSqlEnv registerUdaf(String functionName, Combine.CombineFn combineFn) {
+        ImmutableList<NexmarkSqlEnv.UdafDefinition> newUdafs =
+                ImmutableList.<NexmarkSqlEnv.UdafDefinition>builder()
                         .addAll(udafDefinitions())
-                        .add(NexmarkSqlTransform.UdafDefinition.of(functionName, combineFn))
+                        .add(NexmarkSqlEnv.UdafDefinition.of(functionName, combineFn))
                         .build();
 
         return toBuilder().setUdafDefinitions(newUdafs).build();
     }
 
-    abstract NexmarkSqlTransform.Builder toBuilder();
+    abstract NexmarkSqlEnv.Builder toBuilder();
 
-    static NexmarkSqlTransform.Builder builder() {
-        return new AutoValue_NexmarkSqlTransform.Builder();
+    static NexmarkSqlEnv.Builder builder() {
+        return new AutoValue_NexmarkSqlEnv.Builder();
     }
 
     @AutoValue.Builder
     abstract static class Builder {
-        abstract NexmarkSqlTransform.Builder setQueryString(String queryString);
+        abstract NexmarkSqlEnv.Builder setUdfDefinitions(List<NexmarkSqlEnv.UdfDefinition> udfDefinitions);
 
-        abstract NexmarkSqlTransform.Builder setStatsQuery(String statsQuery);
+        abstract NexmarkSqlEnv.Builder setUdafDefinitions(List<NexmarkSqlEnv.UdafDefinition> udafDefinitions);
 
-        abstract NexmarkSqlTransform.Builder setQueryParameters(QueryParameters queryParameters);
+        abstract NexmarkSqlEnv.Builder setAutoUdfUdafLoad(boolean autoUdfUdafLoad);
 
-        abstract NexmarkSqlTransform.Builder setUdfDefinitions(List<NexmarkSqlTransform.UdfDefinition> udfDefinitions);
+        abstract NexmarkSqlEnv.Builder setTableProviderMap(Map<String, TableProvider> tableProviderMap);
 
-        abstract NexmarkSqlTransform.Builder setUdafDefinitions(List<NexmarkSqlTransform.UdafDefinition> udafDefinitions);
+        abstract NexmarkSqlEnv.Builder setDefaultTableProvider(@Nullable String defaultTableProvider);
 
-        abstract NexmarkSqlTransform.Builder setAutoUdfUdafLoad(boolean autoUdfUdafLoad);
+        abstract NexmarkSqlEnv.Builder setQueryPlannerClassName(@Nullable String queryPlannerClassName);
 
-        abstract NexmarkSqlTransform.Builder setTableProviderMap(Map<String, TableProvider> tableProviderMap);
+        abstract NexmarkSqlEnv.Builder setRates(Map<TupleTag<Row>, Double> rates);
 
-        abstract NexmarkSqlTransform.Builder setDefaultTableProvider(@Nullable String defaultTableProvider);
-
-        abstract NexmarkSqlTransform.Builder setQueryPlannerClassName(@Nullable String queryPlannerClassName);
-
-        abstract NexmarkSqlTransform.Builder setRates(Map<TupleTag<Row>, Double> rates);
-
-        abstract NexmarkSqlTransform build();
+        abstract NexmarkSqlEnv build();
     }
 
     @AutoValue
@@ -305,8 +254,8 @@ public abstract class NexmarkSqlTransform extends PTransform<PInput, PCollection
 
         abstract String methodName();
 
-        static NexmarkSqlTransform.UdfDefinition of(String udfName, Class<?> clazz, String methodName) {
-            return new AutoValue_NexmarkSqlTransform_UdfDefinition(udfName, clazz, methodName);
+        static NexmarkSqlEnv.UdfDefinition of(String udfName, Class<?> clazz, String methodName) {
+            return new AutoValue_NexmarkSqlEnv_UdfDefinition(udfName, clazz, methodName);
         }
     }
 
@@ -318,8 +267,8 @@ public abstract class NexmarkSqlTransform extends PTransform<PInput, PCollection
 
         abstract Combine.CombineFn combineFn();
 
-        static NexmarkSqlTransform.UdafDefinition of(String udafName, Combine.CombineFn combineFn) {
-            return new AutoValue_NexmarkSqlTransform_UdafDefinition(udafName, combineFn);
+        static NexmarkSqlEnv.UdafDefinition of(String udafName, Combine.CombineFn combineFn) {
+            return new AutoValue_NexmarkSqlEnv_UdafDefinition(udafName, combineFn);
         }
     }
 }

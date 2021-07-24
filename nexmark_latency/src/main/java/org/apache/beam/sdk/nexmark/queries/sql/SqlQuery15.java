@@ -18,11 +18,13 @@
 package org.apache.beam.sdk.nexmark.queries.sql;
 
 import org.apache.beam.sdk.extensions.sql.impl.NexmarkQueryPlanner;
+import org.apache.beam.sdk.extensions.sql.impl.QueryPlanner;
+import org.apache.beam.sdk.extensions.sql.impl.rel.BeamSqlRelUtils;
 import org.apache.beam.sdk.io.TextIO;
 import org.apache.beam.sdk.nexmark.NexmarkConfiguration;
 import org.apache.beam.sdk.nexmark.latency.AddArrivalTime;
 import org.apache.beam.sdk.nexmark.latency.LatencyCombineFn;
-import org.apache.beam.sdk.nexmark.latency.NexmarkSqlTransform;
+import org.apache.beam.sdk.nexmark.latency.NexmarkSqlEnv;
 import org.apache.beam.sdk.nexmark.model.Event;
 import org.apache.beam.sdk.nexmark.model.Event.Type;
 import org.apache.beam.sdk.nexmark.model.Latency;
@@ -31,10 +33,10 @@ import org.apache.beam.sdk.nexmark.queries.NexmarkQueryTransform;
 import org.apache.beam.sdk.nexmark.queries.NexmarkQueryUtil;
 import org.apache.beam.sdk.schemas.Schema;
 import org.apache.beam.sdk.transforms.*;
-import org.apache.beam.sdk.values.PCollection;
-import org.apache.beam.sdk.values.PCollectionTuple;
-import org.apache.beam.sdk.values.Row;
-import org.apache.beam.sdk.values.TupleTag;
+import org.apache.beam.sdk.values.*;
+import org.checkerframework.checker.initialization.qual.Initialized;
+import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.UnknownKeyFor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -69,8 +71,14 @@ public class SqlQuery15 extends NexmarkQueryTransform<Latency> {
                         "P.id, P.name, P.emailAddress, P.creditCard, P.city, P.state, P.dateTime, P.extra, " +
                         "TUMBLE(P.dateTime, INTERVAL '%1$d' SECOND)) AS Person " +
                     "ON Auction.seller = Person.id";
+    public static final QueryPlanner.@UnknownKeyFor @NonNull @Initialized QueryParameters QUERY_PARAMETERS = QueryPlanner.QueryParameters.ofNamed(Map.ofEntries(
+            Map.entry("table_column_distinct_row_count:Bid.auction", 100),
+            Map.entry("table_column_distinct_row_count:Auction.id", 100),
+            Map.entry("table_column_distinct_row_count:Person.id", 1000),
+            Map.entry("table_column_distinct_row_count:Auction.seller", 1000)
+    ));
 
-    private final NexmarkSqlTransform query;
+    private final NexmarkSqlEnv query;
 
     private final NexmarkConfiguration configuration;
 
@@ -79,13 +87,7 @@ public class SqlQuery15 extends NexmarkQueryTransform<Latency> {
 
         this.configuration = configuration;
         String queryString = String.format(QUERY_TEMPLATE, configuration.windowSizeSec);
-        query = NexmarkSqlTransform.query(queryString).withQueryPlannerClass(NexmarkQueryPlanner.class)
-                .withNamedParameters(Map.ofEntries(
-                        Map.entry("table_column_distinct_row_count:Bid.auction", 100),
-                        Map.entry("table_column_distinct_row_count:Auction.id", 100),
-                        Map.entry("table_column_distinct_row_count:Person.id", 1000),
-                        Map.entry("table_column_distinct_row_count:Auction.seller", 1000)
-                ));
+        query = NexmarkSqlEnv.build().withQueryPlannerClass(NexmarkQueryPlanner.class);
     }
 
     @Override
@@ -116,12 +118,18 @@ public class SqlQuery15 extends NexmarkQueryTransform<Latency> {
         rates.put(auctionTag, configuration.nextEventRate * configuration.hotAuctionRatio / 100.0);
         rates.put(personTag, configuration.nextEventRate * configuration.hotSellersRatio / 100.0);
 
-        final var output = PCollectionTuple.of(bidTag, bids)
+        PCollection<Row> results = PCollectionTuple.of(bidTag, bids)
                 .and(auctionTag, auctions)
                 .and(personTag, people)
-                .apply(query.withRates(rates));
-        PCollection<Row> results = output.get(NexmarkSqlTransform.MAIN);
-             // .apply(query); // <-- for a run with standard rates
+                .apply(new PTransform<PInput, PCollection<Row>>() {
+                    @Override
+                    public PCollection<Row> expand(PInput input) {
+                        return BeamSqlRelUtils.toPCollection(
+                                input.getPipeline(),
+                                query.apply(input).parseQuery(QUERY_TEMPLATE, QUERY_PARAMETERS)
+                        );
+                    }
+                });
 
         // adding arrival (from join) time for each tuple to be used for latency calculation
         Schema withArrivalTime = Schema.builder().addFields(results.getSchema().getFields()).addDateTimeField("arrivalTime").build();
@@ -134,11 +142,6 @@ public class SqlQuery15 extends NexmarkQueryTransform<Latency> {
 
         latency.apply(ToString.elements())
                 .apply(TextIO.write().to(configuration.latencyLogDirectory)
-                        .withWindowedWrites()
-                        .withNumShards(1)
-                        .withSuffix(".txt"));
-        output.get(NexmarkSqlTransform.STATS).apply(ToString.elements())
-                .apply(TextIO.write().to("stats")
                         .withWindowedWrites()
                         .withNumShards(1)
                         .withSuffix(".txt"));

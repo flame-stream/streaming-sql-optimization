@@ -1,12 +1,16 @@
 package org.apache.beam.sdk.nexmark.counting;
 
 import org.apache.beam.sdk.extensions.sql.impl.CalciteQueryPlanner;
+import org.apache.beam.sdk.extensions.sql.impl.QueryPlanner;
+import org.apache.beam.sdk.extensions.sql.impl.rel.BeamSqlRelUtils;
+import org.apache.beam.sdk.io.TextIO;
 import org.apache.beam.sdk.nexmark.NexmarkConfiguration;
-import org.apache.beam.sdk.nexmark.latency.NexmarkSqlTransform;
+import org.apache.beam.sdk.nexmark.latency.NexmarkSqlEnv;
 import org.apache.beam.sdk.nexmark.utils.LoggingDoFn;
 import org.apache.beam.sdk.transforms.*;
 import org.apache.beam.sdk.values.PCollection;
 import org.apache.beam.sdk.values.PCollectionTuple;
+import org.apache.beam.sdk.values.PInput;
 import org.apache.beam.sdk.values.Row;
 
 public class SqlCounter {
@@ -32,37 +36,50 @@ public class SqlCounter {
                     + " FROM "
                     + "    Bid B";
 
-    public static final NexmarkSqlTransform person_count_query =
-            NexmarkSqlTransform.query(QUERY_COUNT_PERSON).withQueryPlannerClass(CalciteQueryPlanner.class);
-    public static final NexmarkSqlTransform auction_count_query =
-            NexmarkSqlTransform.query(QUERY_COUNT_AUCTION).withQueryPlannerClass(CalciteQueryPlanner.class);
-    public static final NexmarkSqlTransform bid_count_query =
-            NexmarkSqlTransform.query(QUERY_COUNT_BID).withQueryPlannerClass(CalciteQueryPlanner.class);
+    public static final NexmarkSqlEnv NEXMARK_SQL_ENV =
+            NexmarkSqlEnv.build().withQueryPlannerClass(CalciteQueryPlanner.class);
 
     public static void applyCounting(PCollectionTuple withTags, NexmarkConfiguration configuration) {
-        PCollection<Row> person_count = withTags.apply(person_count_query).get(NexmarkSqlTransform.MAIN);
-        PCollection<Row> auction_count = withTags.apply(auction_count_query).get(NexmarkSqlTransform.MAIN);
-        PCollection<Row> bid_count = withTags.apply(bid_count_query).get(NexmarkSqlTransform.MAIN);
-
-//        var directory = configuration.latencyLogDirectory + "_counting";
-//
-//        person_count.apply(ToString.elements())
-//                .apply(TextIO.write().to(directory)
-//                        .withWindowedWrites()
-//                        .withNumShards(1)
-//                        .withSuffix("_PERSON.txt"));
-//
-//        auction_count.apply(ToString.elements())
-//                .apply(TextIO.write().to(directory)
-//                        .withWindowedWrites()
-//                        .withNumShards(1)
-//                        .withSuffix("_AUCTION.txt"));
-//
-//        bid_count.apply(ToString.elements())
-//                .apply(TextIO.write().to(directory)
-//                        .withWindowedWrites()
-//                        .withNumShards(1)
-//                        .withSuffix("_BID.txt"));
+        var directory = configuration.latencyLogDirectory + "_counting";
+        withTags.apply(new PTransform<PInput, PCollection<Row>>() {
+            @Override
+            public PCollection<Row> expand(PInput input) {
+                return BeamSqlRelUtils.toPCollection(
+                        input.getPipeline(),
+                        NEXMARK_SQL_ENV.apply(input).parseQuery(QUERY_COUNT_PERSON, QueryPlanner.QueryParameters.ofNone())
+                );
+            }
+        }).apply(ToString.elements())
+                .apply(TextIO.write().to(directory)
+                        .withWindowedWrites()
+                        .withNumShards(1)
+                        .withSuffix("_PERSON.txt"));
+        withTags.apply(new PTransform<PInput, PCollection<Row>>() {
+            @Override
+            public PCollection<Row> expand(PInput input) {
+                return BeamSqlRelUtils.toPCollection(
+                        input.getPipeline(),
+                        NEXMARK_SQL_ENV.apply(input).parseQuery(QUERY_COUNT_AUCTION, QueryPlanner.QueryParameters.ofNone())
+                );
+            }
+        }).apply(ToString.elements())
+                .apply(TextIO.write().to(directory)
+                        .withWindowedWrites()
+                        .withNumShards(1)
+                        .withSuffix("_AUCTION.txt"));
+        withTags.apply(new PTransform<PInput, PCollection<Row>>() {
+            @Override
+            public PCollection<Row> expand(PInput input) {
+                return BeamSqlRelUtils.toPCollection(
+                        input.getPipeline(),
+                        NEXMARK_SQL_ENV.apply(input).parseQuery(QUERY_COUNT_BID, QueryPlanner.QueryParameters.ofNone())
+                );
+            }
+        }).apply(ToString.elements())
+                .apply(TextIO.write().to(directory)
+                        .withWindowedWrites()
+                        .withNumShards(1)
+                        .withSuffix("_BID.txt"));
     }
 
     public static void applyCountingVer2(PCollectionTuple withTags, NexmarkConfiguration configuration) {
