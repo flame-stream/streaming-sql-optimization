@@ -1,15 +1,13 @@
 package com.flamestream.optimizer.sql.agents.impl;
 
-import com.flamestream.optimizer.sql.agents.util.SqlTransform;
 import com.flamestream.optimizer.sql.agents.Coordinator;
 import com.flamestream.optimizer.sql.agents.CostEstimator;
 import com.flamestream.optimizer.sql.agents.Executor;
+import com.flamestream.optimizer.sql.agents.util.SqlTransform;
 import com.google.common.collect.ImmutableList;
 import org.apache.beam.sdk.Pipeline;
 import org.apache.beam.sdk.extensions.sql.impl.CalciteQueryPlanner;
-import org.apache.beam.sdk.extensions.sql.impl.QueryPlanner;
 import org.apache.beam.sdk.extensions.sql.impl.rel.BeamRelNode;
-import org.apache.beam.sdk.extensions.sql.impl.rel.BeamSqlRelUtils;
 import org.apache.beam.sdk.io.Read;
 import org.apache.beam.sdk.io.UnboundedSource;
 import org.apache.beam.sdk.transforms.PTransform;
@@ -19,14 +17,9 @@ import org.apache.beam.sdk.values.PInput;
 import org.apache.beam.sdk.values.Row;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.plan.RelOptCost;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rel.metadata.RelMetadataProvider;
-import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rel.metadata.RelMetadataQuery;
-import org.checkerframework.checker.initialization.qual.Initialized;
 import org.checkerframework.checker.nullness.compatqual.NonNullType;
-import org.checkerframework.checker.nullness.qual.NonNull;
-import org.checkerframework.checker.nullness.qual.UnknownKeyFor;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -128,8 +121,6 @@ public class CoordinatorImpl implements Coordinator {
 
     private PTransform<@NonNullType PInput, @NonNullType PCollection<Row>>
     resolveQuery(SqlQueryJob sqlQueryJob, ImmutableList<RelMetadataProvider> providers) {
-    private SqlTransform
-            resolveQuery(SqlQueryJob sqlQueryJob, ImmutableList<RelMetadataProvider> providers) {
         return SqlTransform
                 .query(sqlQueryJob.query())
                 .withQueryPlannerClass(CalciteQueryPlanner.class);
@@ -148,7 +139,7 @@ public class CoordinatorImpl implements Coordinator {
         PCollectionTuple withTags = PCollectionTuple.empty(pipeline);
 
         for (Map.Entry<String, PCollection<Row>> inputStreams : tagged.entrySet()) {
-            withTags.and(inputStreams.getKey(), inputStreams.getValue());
+            withTags = withTags.and(inputStreams.getKey(), inputStreams.getValue());
         }
 
         PCollection<Row> results = withTags.apply(sqlTransform);
