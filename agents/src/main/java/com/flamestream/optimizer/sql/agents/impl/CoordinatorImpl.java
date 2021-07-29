@@ -113,17 +113,17 @@ public class CoordinatorImpl implements Coordinator {
     updateSqlTransform(String query, ImmutableList<RelMetadataProvider> providers) {
         // here our planner implementation should give new graph
         BeamRelNode newGraph = queryPlanner.convertToBeamRel(query, QueryPlanner.QueryParameters.ofNone());
-        RelOptCost newGraphCost = estimator.getCumulativeCost(newGraph, providers, RelMetadataQuery.instance());
-        RelOptCost oldGraphCost = estimator.getCumulativeCost(currentGraph, providers, RelMetadataQuery.instance());
-        if (isDifferenceProfitable(newGraphCost, oldGraphCost)) {
-            return new PTransform<>() {
-                @Override
-                public @UnknownKeyFor @NonNull @Initialized PCollection<Row> expand(PInput input) {
-                    return BeamSqlRelUtils.toPCollection(
-                            input.getPipeline(), newGraph);
-                }
-            };
-        }
+//        RelOptCost newGraphCost = estimator.getCumulativeCost(newGraph, providers, RelMetadataQuery.instance());
+//        RelOptCost oldGraphCost = estimator.getCumulativeCost(currentGraph, providers, RelMetadataQuery.instance());
+//        if (isDifferenceProfitable(newGraphCost, oldGraphCost)) {
+//            return new PTransform<>() {
+//                @Override
+//                public @UnknownKeyFor @NonNull @Initialized PCollection<Row> expand(PInput input) {
+//                    return BeamSqlRelUtils.toPCollection(
+//                            input.getPipeline(), newGraph);
+//                }
+//            };
+//        }
         return null;
     }
 

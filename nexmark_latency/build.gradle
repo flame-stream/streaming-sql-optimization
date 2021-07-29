@@ -111,4 +111,5 @@ task run(type: JavaExec) {
   main = "org.apache.beam.sdk.nexmark.Main"
   classpath = sourceSets.main.runtimeClasspath
   args nexmarkArgsStr.split()
+  environment "FLINK_CONF_DIR", "."
 }
