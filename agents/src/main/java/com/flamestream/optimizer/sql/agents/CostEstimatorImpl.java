@@ -18,8 +18,7 @@ public class CostEstimatorImpl implements CostEstimator {
     public RelOptCost getCumulativeCost(
             BeamRelNode rel, Map<String, ?> parameters, RelMetadataQuery mq
     ) {
-        rel
-            .getCluster()
+        rel.getCluster()
             .setMetadataProvider(
                     ChainedRelMetadataProvider.of(
                             org.apache.beam.vendor.calcite.v1_20_0.com.google.common.collect.ImmutableList.of(
@@ -28,11 +27,7 @@ public class CostEstimatorImpl implements CostEstimator {
                                     NexmarkQueryPlanner.NonCumulativeCostImpl.SOURCE,
                                     RelMdNodeStats.SOURCE,
                                     rel.getCluster().getMetadataProvider())));
-        rel.getCluster().setMetadataProvider(ChainedRelMetadataProvider.of(ImmutableList.of(
-                ModifiedCalciteQueryPlanner.NonCumulativeCostImpl.SOURCE,
-                RelMdNodeStats.SOURCE,
-                rel.getCluster().getMetadataProvider()
-        )));
+
         return mq.getCumulativeCost(rel);
     }
 }
