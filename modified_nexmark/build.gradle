@@ -42,8 +42,8 @@ configurations {
 }
 
 dependencies {
-    testCompile group: 'junit', name: 'junit', version: '4.12'
-    compile "org.apache.kafka:kafka-clients:2.4.1"
+    testImplementation group: 'junit', name: 'junit', version: '4.12'
+    implementation "org.apache.kafka:kafka-clients:2.4.1"
     implementation "org.apache.beam:beam-vendor-guava-26_0-jre:0.1"
     implementation 'org.apache.beam:beam-sdks-java-core:2.26.0'
     implementation 'org.apache.beam:beam-sdks-java-extensions-sql:2.26.0'
