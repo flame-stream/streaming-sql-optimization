@@ -4,6 +4,7 @@ import com.flamestream.optimizer.testutils.TestPipelineOptions;
 import org.apache.beam.sdk.Pipeline;
 import org.apache.beam.sdk.extensions.sql.impl.BeamSqlEnv;
 import org.apache.beam.sdk.extensions.sql.impl.ModifiedCalciteQueryPlanner;
+import org.apache.beam.sdk.extensions.sql.impl.QueryPlanner;
 import org.apache.beam.sdk.extensions.sql.impl.rel.BeamRelNode;
 import org.apache.beam.sdk.extensions.sql.impl.schema.BeamPCollectionTable;
 import org.apache.beam.sdk.extensions.sql.meta.provider.ReadOnlyTableProvider;
@@ -35,15 +36,15 @@ public class OptimizerTestUtils {
             + "     Person P INNER JOIN Bid B on B.bidder = P.id"
             + "         INNER JOIN Auction A on A.seller = P.id";
 
-    public static BeamRelNode getFirstQueryPlan() {
-        return getNEXMarkQueryPlan(QUERY_1);
+    public static BeamRelNode getFirstQueryPlan(QueryPlanner.QueryParameters queryParameters) {
+        return getNEXMarkQueryPlan(QUERY_1, queryParameters);
     }
 
-    public static BeamRelNode getSecondQueryPlan() {
-        return getNEXMarkQueryPlan(QUERY_2);
+    public static BeamRelNode getSecondQueryPlan(QueryPlanner.QueryParameters queryParameters) {
+        return getNEXMarkQueryPlan(QUERY_2, queryParameters);
     }
 
-    public static BeamRelNode getNEXMarkQueryPlan(String query) {
+    public static BeamRelNode getNEXMarkQueryPlan(String query, QueryPlanner.QueryParameters queryParameters) {
         final var name = "Test";
         final var windowed = Pipeline.create().apply(
                 name + ".ReadUnbounded",
@@ -73,6 +74,6 @@ public class OptimizerTestUtils {
         ))
                 .setQueryPlannerClassName(ModifiedCalciteQueryPlanner.class.getName())
                 .setPipelineOptions(new TestPipelineOptions())
-                .build().parseQuery(query);
+                .build().parseQuery(query, queryParameters);
     }
 }

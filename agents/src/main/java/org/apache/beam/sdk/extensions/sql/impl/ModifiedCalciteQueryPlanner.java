@@ -237,12 +237,12 @@ public class ModifiedCalciteQueryPlanner implements QueryPlanner {
 
         @SuppressWarnings("UnusedDeclaration")
         public Double getDistinctRowCount(BeamIOSourceRel rel, RelMetadataQuery mq, ImmutableBitSet groupKey, RexNode predicate) {
-            if ((predicate == null || predicate.isAlwaysTrue()) && groupKey.size() == 1) {
+            if ((predicate == null || predicate.isAlwaysTrue()) && groupKey.cardinality() == 1) {
                 final var distinctRowCount =
                         queryParameters.named().get("table_column_distinct_row_count:" + Stream.concat(
                                 rel.getTable().getQualifiedName().stream(),
                                 Stream.of(rel.getBeamSqlTable().getSchema().nameOf(groupKey.nextSetBit(0)))
-                        ).collect(Collectors.joining(".")));
+                        ).map(String::toLowerCase).collect(Collectors.joining(".")));
                 if (distinctRowCount instanceof Number) {
                     return ((Number) distinctRowCount).doubleValue();
                 }

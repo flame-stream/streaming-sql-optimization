@@ -1,6 +1,7 @@
 package com.flamestream.optimizer.sql.agents;
 
 import com.flamestream.optimizer.sql.agents.impl.SqlQueryInspector;
+import org.apache.beam.sdk.extensions.sql.impl.QueryPlanner;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.plan.RelOptTable;
 import org.junit.Test;
 
@@ -13,7 +14,9 @@ import static org.junit.Assert.assertEquals;
 public class SqlQueryInspectorTest {
     @Test
     public void getCumulativeCostFirst() {
-        var res = new SqlQueryInspector().inspectQuery(OptimizerTestUtils.getSecondQueryPlan());
+        var res = new SqlQueryInspector().inspectQuery(
+                OptimizerTestUtils.getSecondQueryPlan(QueryPlanner.QueryParameters.ofNone())
+        );
         assertEquals(res.toString(), 3, res.size());
         assertEquals(res.toString(), 1, res.entrySet().stream().filter(relNodeSetEntry ->
                 Arrays.asList("beam", "Bid").equals(qualifiedName(relNodeSetEntry.getKey().getTable()))
