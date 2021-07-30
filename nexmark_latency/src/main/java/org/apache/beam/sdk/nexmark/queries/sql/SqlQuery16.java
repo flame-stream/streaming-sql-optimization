@@ -17,7 +17,7 @@
  */
 package org.apache.beam.sdk.nexmark.queries.sql;
 
-import org.apache.beam.sdk.extensions.sql.impl.NexmarkQueryPlanner;
+import org.apache.beam.sdk.extensions.sql.impl.ModifiedCalciteQueryPlanner;
 import org.apache.beam.sdk.extensions.sql.impl.QueryPlanner;
 import org.apache.beam.sdk.extensions.sql.impl.rel.BeamSqlRelUtils;
 import org.apache.beam.sdk.io.TextIO;
@@ -79,7 +79,7 @@ public class SqlQuery16 extends NexmarkQueryTransform<Latency> {
         super("SqlQuery16");
 
         this.configuration = configuration;
-        query = NexmarkSqlEnv.build().withQueryPlannerClass(NexmarkQueryPlanner.class);
+        query = NexmarkSqlEnv.build().withQueryPlannerClass(ModifiedCalciteQueryPlanner.class);
     }
 
     @Override
@@ -183,7 +183,7 @@ public class SqlQuery16 extends NexmarkQueryTransform<Latency> {
             input.apply(ParDo.of(new DoFn<Row, Void>() {
                 @ProcessElement
                 public void processElement(ProcessContext c, BoundedWindow window) {
-                    NexmarkSqlEnv.build().withQueryPlannerClass(NexmarkQueryPlanner.class);
+                    NexmarkSqlEnv.build().withQueryPlannerClass(ModifiedCalciteQueryPlanner.class);
                 }
             }));
             return PDone.in(input.getPipeline());

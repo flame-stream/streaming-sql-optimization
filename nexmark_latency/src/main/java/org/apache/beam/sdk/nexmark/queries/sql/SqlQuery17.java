@@ -17,7 +17,7 @@
  */
 package org.apache.beam.sdk.nexmark.queries.sql;
 
-import org.apache.beam.sdk.extensions.sql.impl.NexmarkQueryPlanner;
+import org.apache.beam.sdk.extensions.sql.impl.ModifiedCalciteQueryPlanner;
 import org.apache.beam.sdk.extensions.sql.impl.QueryPlanner;
 import org.apache.beam.sdk.extensions.sql.impl.rel.BeamSqlRelUtils;
 import org.apache.beam.sdk.io.TextIO;
@@ -75,7 +75,7 @@ public class SqlQuery17 extends NexmarkQueryTransform<Latency> {
         super("SqlQuery17");
 
         this.configuration = configuration;
-        query = NexmarkSqlEnv.build().withQueryPlannerClass(NexmarkQueryPlanner.class);
+        query = NexmarkSqlEnv.build().withQueryPlannerClass(ModifiedCalciteQueryPlanner.class);
     }
 
     @Override

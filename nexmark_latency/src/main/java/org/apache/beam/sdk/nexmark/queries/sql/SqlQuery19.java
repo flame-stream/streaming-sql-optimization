@@ -17,7 +17,7 @@
  */
 package org.apache.beam.sdk.nexmark.queries.sql;
 
-import org.apache.beam.sdk.extensions.sql.impl.NexmarkQueryPlanner;
+import org.apache.beam.sdk.extensions.sql.impl.ModifiedCalciteQueryPlanner;
 import org.apache.beam.sdk.extensions.sql.impl.QueryPlanner;
 import org.apache.beam.sdk.extensions.sql.impl.rel.BeamSqlRelUtils;
 import org.apache.beam.sdk.nexmark.NexmarkConfiguration;
@@ -104,7 +104,7 @@ public class SqlQuery19 extends NexmarkQueryTransform<ReceiveArrivalTimes> {
         super("SqlQuery19");
 
         this.configuration = configuration;
-        query = NexmarkSqlEnv.build().withQueryPlannerClass(NexmarkQueryPlanner.class);
+        query = NexmarkSqlEnv.build().withQueryPlannerClass(ModifiedCalciteQueryPlanner.class);
 //        person_count_query = NexmarkSqlTransform.query(QUERY_COUNT_PERSON).withQueryPlannerClass(CalciteQueryPlanner.class);
 //        auction_count_query = NexmarkSqlTransform.query(QUERY_COUNT_AUCTION).withQueryPlannerClass(CalciteQueryPlanner.class);
 //        bid_count_query = NexmarkSqlTransform.query(QUERY_COUNT_BID).withQueryPlannerClass(CalciteQueryPlanner.class);

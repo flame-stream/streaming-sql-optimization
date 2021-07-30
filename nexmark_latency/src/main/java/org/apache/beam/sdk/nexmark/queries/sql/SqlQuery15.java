@@ -17,7 +17,7 @@
  */
 package org.apache.beam.sdk.nexmark.queries.sql;
 
-import org.apache.beam.sdk.extensions.sql.impl.NexmarkQueryPlanner;
+import org.apache.beam.sdk.extensions.sql.impl.ModifiedCalciteQueryPlanner;
 import org.apache.beam.sdk.extensions.sql.impl.QueryPlanner;
 import org.apache.beam.sdk.extensions.sql.impl.rel.BeamSqlRelUtils;
 import org.apache.beam.sdk.io.TextIO;
@@ -58,18 +58,18 @@ public class SqlQuery15 extends NexmarkQueryTransform<Latency> {
 
                     // two joins with windowing
 
-            + "SELECT Bid.dateTime AS timestamp1, " +
+                    + "SELECT Bid.dateTime AS timestamp1, " +
                     "Auction.dateTime AS timestamp2, " +
                     "Person.dateTime AS timestamp3 " +
                     "FROM (SELECT * FROM Bid B GROUP BY " +
-                        "B.auction, B.price, B.bidder, B.dateTime, B.extra,  " +
-                        "TUMBLE(B.dateTime, INTERVAL '%1$d' SECOND)) AS Bid " +
+                    "B.auction, B.price, B.bidder, B.dateTime, B.extra,  " +
+                    "TUMBLE(B.dateTime, INTERVAL '%1$d' SECOND)) AS Bid " +
                     "JOIN (SELECT * FROM Auction A GROUP BY " +
-                        "A.id, A.itemName, A.description, A.initialBid, A.reserve, A.dateTime, A.expires, A.seller, A.category, A.extra,  " +
-                        "TUMBLE(A.dateTime, INTERVAL '%1$d' SECOND)) AS Auction ON Bid.auction = Auction.id " +
+                    "A.id, A.itemName, A.description, A.initialBid, A.reserve, A.dateTime, A.expires, A.seller, A.category, A.extra,  " +
+                    "TUMBLE(A.dateTime, INTERVAL '%1$d' SECOND)) AS Auction ON Bid.auction = Auction.id " +
                     "JOIN (SELECT * FROM Person P GROUP BY " +
-                        "P.id, P.name, P.emailAddress, P.creditCard, P.city, P.state, P.dateTime, P.extra, " +
-                        "TUMBLE(P.dateTime, INTERVAL '%1$d' SECOND)) AS Person " +
+                    "P.id, P.name, P.emailAddress, P.creditCard, P.city, P.state, P.dateTime, P.extra, " +
+                    "TUMBLE(P.dateTime, INTERVAL '%1$d' SECOND)) AS Person " +
                     "ON Auction.seller = Person.id";
     public static final QueryPlanner.@UnknownKeyFor @NonNull @Initialized QueryParameters QUERY_PARAMETERS = QueryPlanner.QueryParameters.ofNamed(Map.ofEntries(
             Map.entry("table_column_distinct_row_count:Bid.auction", 100),
@@ -86,8 +86,7 @@ public class SqlQuery15 extends NexmarkQueryTransform<Latency> {
         super("SqlQuery15");
 
         this.configuration = configuration;
-        String queryString = String.format(QUERY_TEMPLATE, configuration.windowSizeSec);
-        query = NexmarkSqlEnv.build().withQueryPlannerClass(NexmarkQueryPlanner.class);
+        query = NexmarkSqlEnv.build().withQueryPlannerClass(ModifiedCalciteQueryPlanner.class);
     }
 
     @Override
@@ -124,10 +123,10 @@ public class SqlQuery15 extends NexmarkQueryTransform<Latency> {
                 .apply(new PTransform<PInput, PCollection<Row>>() {
                     @Override
                     public PCollection<Row> expand(PInput input) {
-                        return BeamSqlRelUtils.toPCollection(
-                                input.getPipeline(),
-                                query.apply(input).parseQuery(QUERY_TEMPLATE, QUERY_PARAMETERS)
-                        );
+                        return BeamSqlRelUtils.toPCollection(input.getPipeline(), query.apply(input).parseQuery(
+                                String.format(QUERY_TEMPLATE, configuration.windowSizeSec),
+                                QUERY_PARAMETERS
+                        ));
                     }
                 });
 

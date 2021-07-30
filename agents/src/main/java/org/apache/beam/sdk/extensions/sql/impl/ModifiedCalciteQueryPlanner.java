@@ -17,12 +17,6 @@
  */
 package org.apache.beam.sdk.extensions.sql.impl;
 
-import com.google.common.collect.Iterables;
-import org.apache.beam.sdk.extensions.sql.impl.JdbcConnection;
-import org.apache.beam.sdk.extensions.sql.impl.ParseException;
-import org.apache.beam.sdk.extensions.sql.impl.QueryPlanner;
-import org.apache.beam.sdk.extensions.sql.impl.QueryPlanner.QueryParameters.Kind;
-import org.apache.beam.sdk.extensions.sql.impl.SqlConversionException;
 import org.apache.beam.sdk.extensions.sql.impl.planner.BeamCostModel;
 import org.apache.beam.sdk.extensions.sql.impl.planner.RelMdNodeStats;
 import org.apache.beam.sdk.extensions.sql.impl.rel.BeamIOSourceRel;
@@ -39,7 +33,6 @@ import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rel.RelNode;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rel.RelRoot;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rel.core.Join;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rel.metadata.*;
-import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rel.rules.*;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rex.RexCall;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rex.RexInputRef;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rex.RexNode;
@@ -56,15 +49,14 @@ import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.tools.*;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.util.BuiltInMethod;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.util.ImmutableBitSet;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.util.NumberUtil;
-import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * The core component to handle through a SQL statement, from explain execution plan, to generate a
@@ -85,11 +77,7 @@ public class ModifiedCalciteQueryPlanner implements QueryPlanner {
      */
     public ModifiedCalciteQueryPlanner(JdbcConnection connection, Collection<RuleSet> ruleSets) {
         this.connection = connection;
-        this.planner = Frameworks.getPlanner(defaultConfig(connection, ruleSets.stream().map(ruleSet ->
-                RuleSets.ofList(Iterables.filter(ruleSet, rule ->
-                        !(rule instanceof JoinAssociateRule || rule instanceof JoinPushThroughJoinRule)
-                ))
-        ).collect(Collectors.toList())));
+        this.planner = Frameworks.getPlanner(defaultConfig(connection, ruleSets));
     }
 
     public static final Factory FACTORY =
@@ -165,9 +153,6 @@ public class ModifiedCalciteQueryPlanner implements QueryPlanner {
     @Override
     public BeamRelNode convertToBeamRel(String sqlStatement, QueryParameters queryParameters)
             throws ParseException, SqlConversionException {
-        Preconditions.checkArgument(
-                queryParameters.getKind() == Kind.NONE,
-                "Beam SQL Calcite dialect does not yet support query parameters.");
         BeamRelNode beamRelNode;
         try {
             SqlNode parsed = planner.parse(sqlStatement);
@@ -191,7 +176,7 @@ public class ModifiedCalciteQueryPlanner implements QueryPlanner {
                     .setMetadataProvider(
                             ChainedRelMetadataProvider.of(
                                     ImmutableList.of(
-                                            DistinctRowCountHandler.PROVIDER,
+                                            DistinctRowCountHandler.provider(queryParameters),
                                             SelectivityHandler.PROVIDER,
                                             NonCumulativeCostImpl.SOURCE,
                                             RelMdNodeStats.SOURCE,
@@ -212,10 +197,19 @@ public class ModifiedCalciteQueryPlanner implements QueryPlanner {
         return beamRelNode;
     }
 
-    public enum DistinctRowCountHandler implements MetadataHandler<BuiltInMetadata.DistinctRowCount> {
-        INSTANCE;
-        public static final RelMetadataProvider PROVIDER =
-                ReflectiveRelMetadataProvider.reflectiveSource(BuiltInMethod.DISTINCT_ROW_COUNT.method, INSTANCE);
+    public static class DistinctRowCountHandler implements MetadataHandler<BuiltInMetadata.DistinctRowCount> {
+        private final QueryParameters queryParameters;
+
+        public DistinctRowCountHandler(QueryParameters queryParameters) {
+            this.queryParameters = queryParameters;
+        }
+
+        public static RelMetadataProvider provider(QueryParameters queryParameters) {
+            return ReflectiveRelMetadataProvider.reflectiveSource(
+                    BuiltInMethod.DISTINCT_ROW_COUNT.method,
+                    new DistinctRowCountHandler(queryParameters)
+            );
+        }
 
         @Override
         public MetadataDef<BuiltInMetadata.DistinctRowCount> getDef() {
@@ -243,27 +237,17 @@ public class ModifiedCalciteQueryPlanner implements QueryPlanner {
 
         @SuppressWarnings("UnusedDeclaration")
         public Double getDistinctRowCount(BeamIOSourceRel rel, RelMetadataQuery mq, ImmutableBitSet groupKey, RexNode predicate) {
-            if (
-                    matchTable("Bid", rel) && matchTableColumn("auction", rel, groupKey)
-                            || matchTable("Auction", rel) && matchTableColumn("id", rel, groupKey)
-            ) {
-                return 100.0;
-            }
-            if (
-                    matchTable("Person", rel) && matchTableColumn("id", rel, groupKey)
-                            || matchTable("Auction", rel) && matchTableColumn("seller", rel, groupKey)
-            ) {
-                return 1000.0;
+            if ((predicate == null || predicate.isAlwaysTrue()) && groupKey.size() == 1) {
+                final var distinctRowCount =
+                        queryParameters.named().get("table_column_distinct_row_count:" + Stream.concat(
+                                rel.getTable().getQualifiedName().stream(),
+                                Stream.of(rel.getBeamSqlTable().getSchema().nameOf(groupKey.nextSetBit(0)))
+                        ).collect(Collectors.joining(".")));
+                if (distinctRowCount instanceof Number) {
+                    return ((Number) distinctRowCount).doubleValue();
+                }
             }
             return null;
-        }
-
-        private static boolean matchTable(String table, BeamIOSourceRel rel) {
-            return Arrays.asList("beam", table).equals(rel.getTable().getQualifiedName());
-        }
-
-        private static boolean matchTableColumn(String column, BeamIOSourceRel rel, ImmutableBitSet groupKey) {
-            return ImmutableBitSet.of(rel.getBeamSqlTable().getSchema().indexOf(column)).equals(groupKey);
         }
     }
 
@@ -317,9 +301,9 @@ public class ModifiedCalciteQueryPlanner implements QueryPlanner {
                 final var inputRef = (RexInputRef) node;
                 final var leftFieldCount = rel.getLeft().getRowType().getFieldCount();
                 if (inputRef.getIndex() < leftFieldCount) {
-                    return mq.getDistinctRowCount(rel.getLeft(), ImmutableBitSet.builder().set(inputRef.getIndex()).build(), null);
+                    return mq.getDistinctRowCount(rel.getLeft(), ImmutableBitSet.of(inputRef.getIndex()), null);
                 } else {
-                    return mq.getDistinctRowCount(rel.getRight(), ImmutableBitSet.builder().set(inputRef.getIndex() - leftFieldCount).build(), null);
+                    return mq.getDistinctRowCount(rel.getRight(), ImmutableBitSet.of(inputRef.getIndex() - leftFieldCount), null);
                 }
             }
             return null;
