@@ -1,6 +1,7 @@
 package com.flamestream.optimizer.sql.agents;
 
 import org.apache.beam.sdk.io.UnboundedSource;
+import org.apache.beam.sdk.schemas.Schema;
 import org.apache.beam.sdk.transforms.Combine;
 import org.apache.beam.sdk.transforms.PTransform;
 import org.apache.beam.sdk.transforms.SerializableFunction;
@@ -16,7 +17,9 @@ import java.util.stream.Stream;
  */
 public interface Coordinator {
     UnboundedSource<Row, @NonNullType ? extends UnboundedSource.CheckpointMark>
-        registerInput(String tag, UnboundedSource<Row, @NonNullType ? extends UnboundedSource.CheckpointMark> source);
+        registerInput(String tag,
+                      UnboundedSource<Row, @NonNullType ? extends UnboundedSource.CheckpointMark> source,
+                      Schema sourceSchema);
     Stream<UnboundedSource<Row, @NonNullType ? extends UnboundedSource.CheckpointMark>> inputs();
 
     RunningSqlQueryJob start(SqlQueryJob sqlQueryJob);

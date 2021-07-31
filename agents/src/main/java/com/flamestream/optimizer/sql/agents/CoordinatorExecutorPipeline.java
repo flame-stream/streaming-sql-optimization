@@ -14,7 +14,7 @@ public class CoordinatorExecutorPipeline {
         final Executor executor = new ExecutorImpl();
         final Coordinator coordinator = new CoordinatorImpl(costEstimator, executor);
         for (UserSource input : inputs) {
-            coordinator.registerInput(input.getTag(), input.getSource());
+            coordinator.registerInput(input.getTag(), input.getSource(), input.getSchema());
         }
 
         coordinator.start(job);

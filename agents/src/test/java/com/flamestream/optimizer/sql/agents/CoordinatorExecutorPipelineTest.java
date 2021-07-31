@@ -16,8 +16,7 @@ public class CoordinatorExecutorPipelineTest {
 
     @Test
     public void testSomething() {
-
-        final UserSource source = new UserSource("TEST", new TestUnboundedRowSource());
+        final UserSource source = new UserSource("TEST", new TestUnboundedRowSource(), TestUnboundedRowSource.SCHEMA);
         final Coordinator.SqlQueryJob job = new Coordinator.SqlQueryJob() {
             @Override
             public String query() {

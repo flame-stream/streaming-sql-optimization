@@ -10,6 +10,7 @@ import org.apache.beam.sdk.extensions.sql.impl.CalciteQueryPlanner;
 import org.apache.beam.sdk.extensions.sql.impl.rel.BeamRelNode;
 import org.apache.beam.sdk.io.Read;
 import org.apache.beam.sdk.io.UnboundedSource;
+import org.apache.beam.sdk.schemas.Schema;
 import org.apache.beam.sdk.transforms.PTransform;
 import org.apache.beam.sdk.values.PCollection;
 import org.apache.beam.sdk.values.PCollectionTuple;
@@ -30,8 +31,7 @@ import java.util.stream.Stream;
         "nullness"
 })
 public class CoordinatorImpl implements Coordinator {
-    private final HashMap<String, UnboundedSource<Row, @NonNullType ? extends UnboundedSource.CheckpointMark>>
-            sourcesMap = new HashMap<>();
+    private final HashMap<String, SourceWithSchema> sourcesMap = new HashMap<>();
     private final CostEstimator estimator;
     private final Executor executor;
     private final List<RunningSqlQueryJob> runningJobs = new ArrayList<>();
@@ -44,14 +44,16 @@ public class CoordinatorImpl implements Coordinator {
 
     @Override
     public UnboundedSource<Row, @NonNullType ? extends UnboundedSource.CheckpointMark>
-    registerInput(String tag, UnboundedSource<Row, @NonNullType ? extends UnboundedSource.CheckpointMark> source) {
-        sourcesMap.put(tag, source);
+    registerInput(String tag,
+                  UnboundedSource<Row, @NonNullType ? extends UnboundedSource.CheckpointMark> source,
+                  Schema sourceSchema) {
+        sourcesMap.put(tag, new SourceWithSchema(source, sourceSchema));
         return source;
     }
 
     @Override
     public Stream<UnboundedSource<Row, @NonNullType ? extends UnboundedSource.CheckpointMark>> inputs() {
-        return sourcesMap.values().stream();
+        return sourcesMap.values().stream().map(it -> it.source);
     }
 
     @Override
@@ -131,9 +133,10 @@ public class CoordinatorImpl implements Coordinator {
 
         Pipeline pipeline = Pipeline.create();
         HashMap<String, PCollection<Row>> tagged = new HashMap<>();
-        for (Map.Entry<String, UnboundedSource<Row, @NonNullType ? extends UnboundedSource.CheckpointMark>>
+        for (Map.Entry<String, SourceWithSchema>
                 inputEntry : sourcesMap.entrySet()) {
-            tagged.put(inputEntry.getKey(), pipeline.apply(Read.from(inputEntry.getValue())));
+            PCollection<Row> readFromSource = pipeline.apply(Read.from(inputEntry.getValue().source));
+            tagged.put(inputEntry.getKey(), readFromSource.setRowSchema(inputEntry.getValue().schema));
         }
 
         PCollectionTuple withTags = PCollectionTuple.empty(pipeline);
@@ -146,5 +149,16 @@ public class CoordinatorImpl implements Coordinator {
         sqlQueryJob.outputs().forEachOrdered(results::apply);
 
         return pipeline;
+    }
+
+    // TODO visibility
+    private class SourceWithSchema {
+        final UnboundedSource<Row, @NonNullType ? extends UnboundedSource.CheckpointMark> source;
+        final Schema schema;
+
+        SourceWithSchema(UnboundedSource<Row, @NonNullType ? extends UnboundedSource.CheckpointMark> source, Schema schema) {
+            this.source = source;
+            this.schema = schema;
+        }
     }
 }

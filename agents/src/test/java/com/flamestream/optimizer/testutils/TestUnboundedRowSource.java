@@ -24,6 +24,42 @@ import java.util.List;
 import java.util.NoSuchElementException;
 
 public class TestUnboundedRowSource extends UnboundedSource<Row, GeneratorCheckpoint> {
+    public static final Schema PERSON_SCHEMA = Schema.builder()
+            .addField("id", Schema.FieldType.INT64)
+            .addField("name", Schema.FieldType.STRING)
+            .addField("emailAddress", Schema.FieldType.STRING)
+            .addField("creditCard", Schema.FieldType.STRING)
+            .addField("city", Schema.FieldType.STRING)
+            .addField("state", Schema.FieldType.STRING)
+            .addField("dateTime", Schema.FieldType.DATETIME)
+            .addField("extra", Schema.FieldType.STRING)
+            .build();
+    public static final Schema AUCTION_SCHEMA = Schema.builder()
+            .addField("id", Schema.FieldType.INT64)
+            .addField("itemName", Schema.FieldType.STRING)
+            .addField("description", Schema.FieldType.STRING)
+            .addField("initialBid", Schema.FieldType.INT64)
+            .addField("reserve", Schema.FieldType.INT64)
+            .addField("dateTime", Schema.FieldType.DATETIME)
+            .addField("expires", Schema.FieldType.DATETIME)
+            .addField("seller", Schema.FieldType.INT64)
+            .addField("category", Schema.FieldType.INT64)
+            .addField("extra", Schema.FieldType.STRING)
+            .build();
+    public static final Schema BID_SCHEMA = Schema.builder()
+            .addField("auction", Schema.FieldType.INT64)
+            .addField("bidder", Schema.FieldType.INT64)
+            .addField("price", Schema.FieldType.INT64)
+            .addField("dateTime", Schema.FieldType.DATETIME)
+            .addField("extra", Schema.FieldType.STRING)
+            .build();
+    public static final Schema SCHEMA = Schema.builder()
+            .addField("newPerson", Schema.FieldType.row(PERSON_SCHEMA))
+            .addField("newAuction", Schema.FieldType.row(AUCTION_SCHEMA))
+            .addField("bid", Schema.FieldType.row(BID_SCHEMA))
+            .build();
+
+
     private final UnboundedEventSource source;
     private final NexmarkConfiguration nexmarkConfig;
     private final GeneratorConfig generatorConfig;
@@ -92,43 +128,6 @@ public class TestUnboundedRowSource extends UnboundedSource<Row, GeneratorCheckp
     }
 
     private class RowReader extends UnboundedReader<Row> {
-        private final Schema PERSON_SCHEMA = Schema.builder()
-                .addField("id", Schema.FieldType.INT64)
-                .addField("name", Schema.FieldType.STRING)
-                .addField("emailAddress", Schema.FieldType.STRING)
-                .addField("creditCard", Schema.FieldType.STRING)
-                .addField("creditCard", Schema.FieldType.STRING)
-                .addField("city", Schema.FieldType.STRING)
-                .addField("state", Schema.FieldType.STRING)
-                .addField("dateTime", Schema.FieldType.DATETIME)
-                .addField("extra", Schema.FieldType.STRING)
-                .build();
-        private final Schema AUCTION_SCHEMA = Schema.builder()
-                .addField("id", Schema.FieldType.INT64)
-                .addField("itemName", Schema.FieldType.STRING)
-                .addField("description", Schema.FieldType.STRING)
-                .addField("initialBid", Schema.FieldType.INT64)
-                .addField("reserve", Schema.FieldType.INT64)
-                .addField("dateTime", Schema.FieldType.DATETIME)
-                .addField("expires", Schema.FieldType.DATETIME)
-                .addField("seller", Schema.FieldType.INT64)
-                .addField("category", Schema.FieldType.INT64)
-                .addField("extra", Schema.FieldType.STRING)
-                .build();
-        private final Schema BID_SCHEMA = Schema.builder()
-                .addField("auction", Schema.FieldType.INT64)
-                .addField("bidder", Schema.FieldType.INT64)
-                .addField("price", Schema.FieldType.INT64)
-                .addField("dateTime", Schema.FieldType.DATETIME)
-                .addField("extra", Schema.FieldType.STRING)
-                .build();
-        private final Schema SCHEMA = Schema.builder()
-                .addField("newPerson", Schema.FieldType.row(PERSON_SCHEMA))
-                .addField("newAuction", Schema.FieldType.row(AUCTION_SCHEMA))
-                .addField("bid", Schema.FieldType.row(BID_SCHEMA))
-                .build();
-
-
         private final UnboundedReader<Event> eventReader;
 
         public RowReader(final UnboundedReader<Event> eventReader) {
