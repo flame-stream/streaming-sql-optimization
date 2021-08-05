@@ -12,6 +12,7 @@ import org.apache.beam.sdk.io.Read;
 import org.apache.beam.sdk.io.UnboundedSource;
 import org.apache.beam.sdk.schemas.Schema;
 import org.apache.beam.sdk.transforms.PTransform;
+import org.apache.beam.sdk.transforms.windowing.Window;
 import org.apache.beam.sdk.values.PCollection;
 import org.apache.beam.sdk.values.PCollectionTuple;
 import org.apache.beam.sdk.values.PInput;
@@ -135,7 +136,8 @@ public class CoordinatorImpl implements Coordinator {
         HashMap<String, PCollection<Row>> tagged = new HashMap<>();
         for (Map.Entry<String, SourceWithSchema>
                 inputEntry : sourcesMap.entrySet()) {
-            PCollection<Row> readFromSource = pipeline.apply(Read.from(inputEntry.getValue().source));
+            PCollection<Row> readFromSource = pipeline.apply(Read.from(inputEntry.getValue().source))
+                    .apply(Window.into(sqlQueryJob.windowFunction()));
             tagged.put(inputEntry.getKey(), readFromSource.setRowSchema(inputEntry.getValue().schema));
         }
 

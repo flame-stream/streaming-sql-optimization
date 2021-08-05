@@ -5,6 +5,10 @@ import org.apache.beam.sdk.schemas.Schema;
 import org.apache.beam.sdk.transforms.Combine;
 import org.apache.beam.sdk.transforms.PTransform;
 import org.apache.beam.sdk.transforms.SerializableFunction;
+import org.apache.beam.sdk.transforms.windowing.BoundedWindow;
+import org.apache.beam.sdk.transforms.windowing.IntervalWindow;
+import org.apache.beam.sdk.transforms.windowing.PartitioningWindowFn;
+import org.apache.beam.sdk.transforms.windowing.WindowFn;
 import org.apache.beam.sdk.values.*;
 import org.checkerframework.checker.nullness.compatqual.NonNullType;
 
@@ -29,6 +33,7 @@ public interface Coordinator {
     interface SqlQueryJob {
         String query();
         Stream<PTransform<PCollection<Row>, PDone>> outputs();
+        WindowFn<Object, ? extends BoundedWindow> windowFunction();
     }
 
     interface RunningSqlQueryJob {

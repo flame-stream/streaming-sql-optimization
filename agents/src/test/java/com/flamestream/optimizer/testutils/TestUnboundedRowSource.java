@@ -12,18 +12,21 @@ import org.apache.beam.sdk.nexmark.sources.generator.GeneratorCheckpoint;
 import org.apache.beam.sdk.nexmark.sources.generator.GeneratorConfig;
 import org.apache.beam.sdk.options.PipelineOptions;
 import org.apache.beam.sdk.schemas.Schema;
+import org.apache.beam.sdk.schemas.SchemaCoder;
 import org.apache.beam.sdk.values.Row;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.joda.time.Instant;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.NoSuchElementException;
 
 public class TestUnboundedRowSource extends UnboundedSource<Row, GeneratorCheckpoint> {
+    public static final Logger LOG = LoggerFactory.getLogger(TestUnboundedRowSource.class);
+
     public static final Schema PERSON_SCHEMA = Schema.builder()
             .addField("id", Schema.FieldType.INT64)
             .addField("name", Schema.FieldType.STRING)
@@ -54,9 +57,9 @@ public class TestUnboundedRowSource extends UnboundedSource<Row, GeneratorCheckp
             .addField("extra", Schema.FieldType.STRING)
             .build();
     public static final Schema SCHEMA = Schema.builder()
-            .addField("newPerson", Schema.FieldType.row(PERSON_SCHEMA))
-            .addField("newAuction", Schema.FieldType.row(AUCTION_SCHEMA))
-            .addField("bid", Schema.FieldType.row(BID_SCHEMA))
+            .addField("newPerson", Schema.FieldType.row(PERSON_SCHEMA).withNullable(true))
+            .addField("newAuction", Schema.FieldType.row(AUCTION_SCHEMA).withNullable(true))
+            .addField("bid", Schema.FieldType.row(BID_SCHEMA).withNullable(true))
             .build();
 
 
@@ -67,6 +70,7 @@ public class TestUnboundedRowSource extends UnboundedSource<Row, GeneratorCheckp
     public TestUnboundedRowSource() {
         final NexmarkConfiguration config = NexmarkConfiguration.DEFAULT;
         nexmarkConfig = config;
+        config.numEvents = 1000;
         generatorConfig = new GeneratorConfig(
                 config,
                 config.useWallclockEventTime ? System.currentTimeMillis() : 0,
@@ -84,7 +88,6 @@ public class TestUnboundedRowSource extends UnboundedSource<Row, GeneratorCheckp
     @Override
     public List<? extends UnboundedSource<Row, GeneratorCheckpoint>> split(int desiredNumSplits, PipelineOptions options) {
         List<TestUnboundedRowSource> results = new ArrayList<>();
-        // Ignore desiredNumSplits and use numEventGenerators instead.
         for (GeneratorConfig ignored : generatorConfig.split(nexmarkConfig.numEventGenerators)) {
             results.add(new TestUnboundedRowSource());
         }
@@ -103,28 +106,8 @@ public class TestUnboundedRowSource extends UnboundedSource<Row, GeneratorCheckp
     }
 
     @Override
-    public  Coder<Row> getOutputCoder() {
-        return new Coder<>() {
-            @Override
-            public void encode(Row value, OutputStream outStream) {
-
-            }
-
-            @Override
-            public Row decode(InputStream inStream) {
-                return null;
-            }
-
-            @Override
-            public List<? extends Coder<?>> getCoderArguments() {
-                return List.of();
-            }
-
-            @Override
-            public void verifyDeterministic() {
-
-            }
-        };
+    public Coder<Row> getOutputCoder() {
+        return SchemaCoder.of(SCHEMA);
     }
 
     private class RowReader extends UnboundedReader<Row> {
@@ -150,55 +133,50 @@ public class TestUnboundedRowSource extends UnboundedSource<Row, GeneratorCheckp
             if (currentEvent == null) {
                 return null;
             }
+            final Row res;
             if (currentEvent.newPerson != null) {
                 final Person person = currentEvent.newPerson;
-                return Row.withSchema(SCHEMA)
-                        .withFieldValue("newPerson", Row.withSchema(PERSON_SCHEMA).attachValues(
-                                person.id,
-                                person.name,
-                                person.emailAddress,
-                                person.creditCard,
-                                person.city,
-                                person.state,
-                                person.dateTime,
-                                person.extra
-                        ))
-                        .withFieldValue("newAuction", Row.withSchema(AUCTION_SCHEMA).build())
-                        .withFieldValue("bid", Row.withSchema(BID_SCHEMA).build())
-                        .build();
+                final Row personRow = Row.withSchema(PERSON_SCHEMA).addValues(
+                        person.id,
+                        person.name,
+                        person.emailAddress,
+                        person.creditCard,
+                        person.city,
+                        person.state,
+                        person.dateTime,
+                        person.extra
+                ).build();
+                res = Row.withSchema(SCHEMA).withFieldValue("newPerson", personRow).build();
             } else if (currentEvent.newAuction != null) {
                 final Auction auction = currentEvent.newAuction;
-                return Row.withSchema(SCHEMA)
-                        .withFieldValue("newPerson", Row.withSchema(PERSON_SCHEMA).build())
-                        .withFieldValue("newAuction", Row.withSchema(AUCTION_SCHEMA).attachValues(
-                                auction.id,
-                                auction.itemName,
-                                auction.description,
-                                auction.initialBid,
-                                auction.reserve,
-                                auction.dateTime,
-                                auction.expires,
-                                auction.seller,
-                                auction.category,
-                                auction.extra
-                        ))
-                        .withFieldValue("bid", Row.withSchema(BID_SCHEMA).build())
-                        .build();
+                final Row auctionRow = Row.withSchema(AUCTION_SCHEMA).addValues(
+                        auction.id,
+                        auction.itemName,
+                        auction.description,
+                        auction.initialBid,
+                        auction.reserve,
+                        auction.dateTime,
+                        auction.expires,
+                        auction.seller,
+                        auction.category,
+                        auction.extra
+                ).build();
+                res = Row.withSchema(SCHEMA).withFieldValue("newAuction", auctionRow).build();
             } else if (currentEvent.bid != null) {
                 final Bid bid = currentEvent.bid;
-                return Row.withSchema(SCHEMA)
-                        .withFieldValue("newPerson", Row.withSchema(PERSON_SCHEMA).build())
-                        .withFieldValue("newAuction", Row.withSchema(AUCTION_SCHEMA).build())
-                        .withFieldValue("bid", Row.withSchema(BID_SCHEMA).attachValues(
-                                bid.auction,
-                                bid.bidder,
-                                bid.price,
-                                bid.dateTime,
-                                bid.extra
-                        )).build();
+                final Row bidRow = Row.withSchema(BID_SCHEMA).addValues(
+                        bid.auction,
+                        bid.bidder,
+                        bid.price,
+                        bid.dateTime,
+                        bid.extra
+                ).build();
+                res = Row.withSchema(SCHEMA).withFieldValue("bid", bidRow).build();
+            } else {
+                res = null;
             }
 
-            return null;
+            return res;
         }
 
         @Override

@@ -2,20 +2,32 @@ package com.flamestream.optimizer.sql.agents;
 
 import com.flamestream.optimizer.testutils.TestUnboundedRowSource;
 import org.apache.beam.sdk.io.TextIO;
+import org.apache.beam.sdk.nexmark.NexmarkOptions;
+import org.apache.beam.sdk.options.PipelineOptions;
+import org.apache.beam.sdk.options.PipelineOptionsFactory;
 import org.apache.beam.sdk.transforms.PTransform;
 import org.apache.beam.sdk.transforms.ToString;
+import org.apache.beam.sdk.transforms.windowing.BoundedWindow;
+import org.apache.beam.sdk.transforms.windowing.FixedWindows;
+import org.apache.beam.sdk.transforms.windowing.WindowFn;
 import org.apache.beam.sdk.values.PCollection;
 import org.apache.beam.sdk.values.PDone;
 import org.apache.beam.sdk.values.Row;
+import org.joda.time.Duration;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 
 import java.util.List;
 import java.util.stream.Stream;
 
 public class CoordinatorExecutorPipelineTest {
 
+    @Rule
+    public TemporaryFolder folder = new TemporaryFolder();
+
     @Test
-    public void testSomething() {
+    public void testCoordinatorExecutorRunNexmark() {
         final UserSource source = new UserSource("TEST", new TestUnboundedRowSource(), TestUnboundedRowSource.SCHEMA);
         final Coordinator.SqlQueryJob job = new Coordinator.SqlQueryJob() {
             @Override
@@ -24,13 +36,17 @@ public class CoordinatorExecutorPipelineTest {
             }
 
             @Override
+            public WindowFn<Object, ? extends BoundedWindow> windowFunction() {
+                return FixedWindows.of(Duration.standardSeconds(1));
+            }
+
+            @Override
             public Stream<PTransform<PCollection<Row>, PDone>> outputs() {
                 return Stream.of(PTransform.compose(
                         (PCollection<Row> rows) -> {
-                            PCollection<String> strings =
-                                    rows.apply(ToString.elements());
+                            PCollection<String> strings = rows.apply(ToString.elements());
                             return strings.apply(TextIO.write()
-                                    .to("/home/darya/Documents/flink_temp_dir")
+                                    .to(folder.getRoot().getAbsolutePath())
                                     .withWindowedWrites()
                                     .withNumShards(1)
                                     .withSuffix(".txt"));
@@ -38,9 +54,9 @@ public class CoordinatorExecutorPipelineTest {
             }
         };
 
-        CoordinatorExecutorPipeline.fromUserQuery(null, List.of(source), job);
-
-
+        // should probably be configured some other way but this was the easiest
+        final String[] args = ("--runner=FlinkRunner --query=16 --queryLanguage=sql --streaming=true --manageResources=false --monitorJobs=true --flinkMaster=localhost:8081 --tempLocation=" + folder.getRoot().getAbsolutePath()).split(" ");
+        final PipelineOptions options = PipelineOptionsFactory.fromArgs(args).withValidation().as(NexmarkOptions.class);
+        CoordinatorExecutorPipeline.fromUserQuery(null, List.of(source), job, options);
     }
-
 }
