@@ -55,7 +55,7 @@ public class CoordinatorExecutorPipelineTest {
         };
 
         // should probably be configured some other way but this was the easiest
-        final String[] args = ("--runner=FlinkRunner --query=16 --queryLanguage=sql --streaming=true --manageResources=false --monitorJobs=true --flinkMaster=localhost:8081 --tempLocation=" + folder.getRoot().getAbsolutePath()).split(" ");
+        final String[] args = ("--runner=FlinkRunner --query=16 --queryLanguage=sql --streaming=true --manageResources=false --monitorJobs=true --flinkMaster=[local] --tempLocation=" + folder.getRoot().getAbsolutePath()).split(" ");
         final PipelineOptions options = PipelineOptionsFactory.fromArgs(args).withValidation().as(NexmarkOptions.class);
         CoordinatorExecutorPipeline.fromUserQuery(null, List.of(source), job, options);
     }
