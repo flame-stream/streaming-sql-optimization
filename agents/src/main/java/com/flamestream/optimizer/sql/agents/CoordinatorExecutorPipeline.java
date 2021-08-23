@@ -6,6 +6,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.apache.beam.sdk.options.PipelineOptions;
 
 import java.util.Collection;
+import java.util.Map;
 
 public class CoordinatorExecutorPipeline {
     public static void fromUserQuery(
@@ -16,10 +17,14 @@ public class CoordinatorExecutorPipeline {
 
         final Executor executor = new ExecutorImpl(executorPipelineOptions);
         final Coordinator coordinator = new CoordinatorImpl(costEstimator, executor);
-        for (UserSource input : inputs) {
-            coordinator.registerInput(input.getTag(), input.getSource(), input.getSchema());
+
+        for (var input : inputs) {
+            coordinator.registerInput(input.getSource(), input.getSchema(), Map.of());
         }
 
         coordinator.start(job);
+        try {
+            Thread.sleep(50000);
+        } catch (Exception e) { }
     }
 }

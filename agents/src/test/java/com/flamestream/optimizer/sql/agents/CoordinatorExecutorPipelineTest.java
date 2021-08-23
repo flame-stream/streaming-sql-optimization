@@ -1,8 +1,10 @@
 package com.flamestream.optimizer.sql.agents;
 
+import com.flamestream.optimizer.sql.agents.testutils.TestSource;
 import com.flamestream.optimizer.testutils.TestUnboundedRowSource;
 import org.apache.beam.sdk.io.TextIO;
 import org.apache.beam.sdk.nexmark.NexmarkOptions;
+import org.apache.beam.sdk.nexmark.model.Event;
 import org.apache.beam.sdk.options.PipelineOptions;
 import org.apache.beam.sdk.options.PipelineOptionsFactory;
 import org.apache.beam.sdk.transforms.PTransform;
@@ -28,11 +30,14 @@ public class CoordinatorExecutorPipelineTest {
 
     @Test
     public void testCoordinatorExecutorRunNexmark() {
-        final UserSource source = new UserSource("TEST", new TestUnboundedRowSource(), TestUnboundedRowSource.SCHEMA);
+        final UserSource<Event> source = new UserSource<>(
+                TestSource.getTestSource(),
+                TestUnboundedRowSource.SCHEMA,
+                TestSource.getTestMappingMap());
         final Coordinator.SqlQueryJob job = new Coordinator.SqlQueryJob() {
             @Override
             public String query() {
-                return "SELECT * FROM TEST";
+                return "SELECT * FROM Bid";
             }
 
             @Override

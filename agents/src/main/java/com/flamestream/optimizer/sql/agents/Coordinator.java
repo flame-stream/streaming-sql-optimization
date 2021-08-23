@@ -12,7 +12,9 @@ import org.apache.beam.sdk.transforms.windowing.WindowFn;
 import org.apache.beam.sdk.values.*;
 import org.checkerframework.checker.nullness.compatqual.NonNullType;
 
+import java.util.Map;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.stream.Stream;
 
 /**
@@ -20,11 +22,12 @@ import java.util.stream.Stream;
  * and decides if the graph changing is needed using handled stats.
  */
 public interface Coordinator {
-    UnboundedSource<Row, @NonNullType ? extends UnboundedSource.CheckpointMark>
-        registerInput(String tag,
-                      UnboundedSource<Row, @NonNullType ? extends UnboundedSource.CheckpointMark> source,
-                      Schema sourceSchema);
-    Stream<UnboundedSource<Row, @NonNullType ? extends UnboundedSource.CheckpointMark>> inputs();
+    <T> void registerInput(
+            UnboundedSource<T, @NonNullType ? extends UnboundedSource.CheckpointMark> source,
+            Schema sourceSchema,
+            Map<String, PTransform<PCollection<T>, PCollection<Row>>> tableMapping
+    );
+    Stream<UnboundedSource<?, @NonNullType ? extends UnboundedSource.CheckpointMark>> inputs();
 
     RunningSqlQueryJob start(SqlQueryJob sqlQueryJob);
     void stop(RunningSqlQueryJob runningSqlQueryJob);

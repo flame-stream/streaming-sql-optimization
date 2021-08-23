@@ -1,4 +1,4 @@
-package com.flamestream.optimizer.testutils;
+package com.flamestream.optimizer.sql.agents.testutils;
 
 import org.apache.beam.sdk.PipelineRunner;
 import org.apache.beam.sdk.options.PipelineOptions;
