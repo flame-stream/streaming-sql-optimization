@@ -14,15 +14,19 @@ import org.apache.beam.sdk.extensions.sql.impl.schema.BeamPCollectionTable;
 import org.apache.beam.sdk.extensions.sql.meta.provider.ReadOnlyTableProvider;
 import org.apache.beam.sdk.io.Read;
 import org.apache.beam.sdk.io.UnboundedSource;
+import org.apache.beam.sdk.nexmark.Monitor;
+import org.apache.beam.sdk.nexmark.NexmarkUtils;
 import org.apache.beam.sdk.nexmark.model.Event;
 import org.apache.beam.sdk.schemas.Schema;
 import org.apache.beam.sdk.transforms.*;
 import org.apache.beam.sdk.transforms.windowing.BoundedWindow;
+import org.apache.beam.sdk.transforms.windowing.FixedWindows;
 import org.apache.beam.sdk.transforms.windowing.Window;
 import org.apache.beam.sdk.values.*;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.plan.RelOptCost;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rel.metadata.RelMetadataProvider;
 import org.checkerframework.checker.nullness.compatqual.NonNullType;
+import org.joda.time.Duration;
 import org.joda.time.Instant;
 
 import java.util.*;
@@ -188,18 +192,9 @@ public class CoordinatorImpl implements Coordinator {
         final Map<String, PTransform<PCollection<T>, PCollection<Row>>> tableMapping;
 
         public void applyTransforms(Pipeline pipeline, SqlQueryJob sqlQueryJob, HashMap<String, PCollection<Row>> tagged) {
-            PCollection<T> readFromSource = pipeline.apply(Read.from(source)).setRowSchema(schema)
-                    .apply(ParDo.of(new DoFn<T, T>() {
-                        @ProcessElement
-                        public void processElement(ProcessContext c, BoundedWindow window, @Timestamp Instant timestamp) {
-                            T row = c.element();
-                            if (row != null) {
-                                System.out.println(row.toString());
-                            }
-                            c.output(row);
-                        }
-                    }))
+            PCollection<T> readFromSource = pipeline.apply(Read.from(source))
                     .apply(Window.into(sqlQueryJob.windowFunction()));
+
             for (var entry: tableMapping.entrySet()) {
                 tagged.put(entry.getKey(), readFromSource.apply(entry.getValue()));
             }

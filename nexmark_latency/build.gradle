@@ -76,6 +76,14 @@ dependencies {
   annotationProcessor 'com.google.auto.value:auto-value:1.6'
   testImplementation group: 'org.hamcrest', name: 'hamcrest', version: '2.2'
   implementation group: 'org.slf4j', name: 'slf4j-simple', version: '1.7.30'
+  // https://mvnrepository.com/artifact/com.fasterxml.jackson.core/jackson-databind
+  implementation group: 'com.fasterxml.jackson.core', name: 'jackson-databind', version: '2.12.2'
+  implementation group: 'com.fasterxml.jackson.core', name: 'jackson-core', version: '2.12.2'
+  implementation group: 'com.fasterxml.jackson.core', name: 'jackson-annotations', version: '2.12.2'
+  implementation group: 'com.fasterxml.jackson.datatype', name: 'jackson-datatype-joda', version: '2.12.2'
+  implementation group: 'com.fasterxml.jackson.datatype', name: 'jackson-datatype-jdk8', version: '2.12.2'
+  implementation group: 'com.fasterxml.jackson.datatype', name: 'jackson-datatype-jsr310', version: '2.12.2'
+  implementation group: 'com.fasterxml.jackson.module', name: 'jackson-module-jaxb-annotations', version: '2.12.2'
 }
 
 if (shouldProvideSpark) {

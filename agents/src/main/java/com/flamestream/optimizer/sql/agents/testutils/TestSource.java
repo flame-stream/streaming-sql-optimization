@@ -1,6 +1,8 @@
 package com.flamestream.optimizer.sql.agents.testutils;
 
+import org.apache.beam.sdk.nexmark.Monitor;
 import org.apache.beam.sdk.nexmark.NexmarkConfiguration;
+import org.apache.beam.sdk.nexmark.NexmarkUtils;
 import org.apache.beam.sdk.nexmark.model.Event;
 import org.apache.beam.sdk.nexmark.model.sql.SelectEvent;
 import org.apache.beam.sdk.nexmark.sources.UnboundedEventSource;
@@ -13,10 +15,15 @@ import org.apache.beam.sdk.values.Row;
 import java.util.Map;
 
 public class TestSource {
+    private static final Monitor<Event> eventMonitor = new Monitor<>("TestMonitor" + ".Events", "event");
+
     public static PTransform<PCollection<Event>, PCollection<Row>> auctionTransform = new PTransform<PCollection<Event>, PCollection<Row>>() {
         @Override
         public PCollection<Row> expand(PCollection<Event> input) {
-            return input
+            return input // Monitor events as they go by.
+                    .apply("Auction" + ".Monitor", eventMonitor.getTransform())
+                    // Count each type of event.
+                    .apply("Auction" + ".Snoop", NexmarkUtils.snoop("Auction"))
                     .apply(getName() + ".Filter." + "Auction", Filter.by(e1 -> e1.newAuction != null))
                     .apply(getName() + ".ToRecords." + "Auction", new SelectEvent(Event.Type.AUCTION));
         }
@@ -25,7 +32,10 @@ public class TestSource {
     public static PTransform<PCollection<Event>, PCollection<Row>> bidTransform = new PTransform<PCollection<Event>, PCollection<Row>>() {
         @Override
         public PCollection<Row> expand(PCollection<Event> input) {
-            return input
+            return input // Monitor events as they go by.
+                    .apply("Bid" + ".Monitor", eventMonitor.getTransform())
+                    // Count each type of event.
+                    .apply("Bid" + ".Snoop", NexmarkUtils.snoop("Bid"))
                     .apply(getName() + ".Filter." + "Bid", Filter.by(e1 -> e1.bid != null))
                     .apply(getName() + ".ToRecords." + "Bid", new SelectEvent(Event.Type.BID));
         }
@@ -34,7 +44,10 @@ public class TestSource {
     public static PTransform<PCollection<Event>, PCollection<Row>> personTransform = new PTransform<PCollection<Event>, PCollection<Row>>() {
         @Override
         public PCollection<Row> expand(PCollection<Event> input) {
-            return input
+            return input // Monitor events as they go by.
+                    .apply("Person" + ".Monitor", eventMonitor.getTransform())
+                    // Count each type of event.
+                    .apply("Person" + ".Snoop", NexmarkUtils.snoop("Person"))
                     .apply(getName() + ".Filter." + "Person", Filter.by(e1 -> e1.newPerson != null))
                     .apply(getName() + ".ToRecords." + "Person", new SelectEvent(Event.Type.PERSON));
         }
@@ -50,7 +63,7 @@ public class TestSource {
 
     public static UnboundedEventSource getTestSource() {
         final NexmarkConfiguration config = NexmarkConfiguration.DEFAULT;
-        config.numEvents = 100000;
+        config.numEvents = 100;
         var generatorConfig = new GeneratorConfig(
                 config,
                 config.useWallclockEventTime ? System.currentTimeMillis() : 0,

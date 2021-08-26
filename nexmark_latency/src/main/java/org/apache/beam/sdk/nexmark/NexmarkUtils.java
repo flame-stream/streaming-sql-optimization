@@ -83,6 +83,10 @@ public class NexmarkUtils {
   /** Mapper for (de)serializing JSON. */
   public static final ObjectMapper MAPPER = new ObjectMapper();
 
+  static {
+    MAPPER.registerModule(new com.fasterxml.jackson.datatype.joda.JodaModule());
+  }
+
   /** Possible sources for events. */
   public enum SourceType {
     /** Produce events directly. */

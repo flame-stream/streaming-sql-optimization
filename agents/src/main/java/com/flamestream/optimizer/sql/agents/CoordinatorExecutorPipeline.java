@@ -19,7 +19,7 @@ public class CoordinatorExecutorPipeline {
         final Coordinator coordinator = new CoordinatorImpl(costEstimator, executor);
 
         for (var input : inputs) {
-            coordinator.registerInput(input.getSource(), input.getSchema(), Map.of());
+            coordinator.registerInput(input.getSource(), input.getSchema(), input.getTableMapping());
         }
 
         coordinator.start(job);

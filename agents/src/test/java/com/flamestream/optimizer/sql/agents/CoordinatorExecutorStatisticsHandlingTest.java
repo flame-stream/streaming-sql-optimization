@@ -7,6 +7,7 @@ import com.flamestream.optimizer.sql.agents.testutils.TestSource;
 import com.flamestream.optimizer.testutils.TestUnboundedRowSource;
 import org.apache.beam.sdk.io.TextIO;
 import org.apache.beam.sdk.nexmark.NexmarkOptions;
+import org.apache.beam.sdk.nexmark.NexmarkUtils;
 import org.apache.beam.sdk.nexmark.model.Event;
 import org.apache.beam.sdk.options.PipelineOptions;
 import org.apache.beam.sdk.options.PipelineOptionsFactory;
