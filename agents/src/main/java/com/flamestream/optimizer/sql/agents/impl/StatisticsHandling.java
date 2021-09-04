@@ -1,5 +1,10 @@
 package com.flamestream.optimizer.sql.agents.impl;
 
+import com.flamestream.optimizer.sql.agents.Services;
+import com.flamestream.optimizer.sql.agents.StatsServiceGrpc;
+import com.google.protobuf.Empty;
+import io.grpc.*;
+import io.grpc.stub.StreamObserver;
 import org.apache.beam.sdk.transforms.DoFn;
 import org.apache.beam.sdk.transforms.PTransform;
 import org.apache.beam.sdk.transforms.ParDo;
@@ -7,34 +12,34 @@ import org.apache.beam.sdk.transforms.windowing.BoundedWindow;
 import org.apache.beam.sdk.values.PCollection;
 import org.apache.beam.sdk.values.PDone;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.nio.ByteBuffer;
-import java.nio.channels.SelectionKey;
-import java.nio.channels.Selector;
-import java.nio.channels.ServerSocketChannel;
-import java.nio.channels.SocketChannel;
-import java.util.Iterator;
-import java.util.Set;
+import java.util.Collections;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 public class StatisticsHandling {
+    private static final Metadata.Key<String> TAG = Metadata.Key.of("tag", Metadata.ASCII_STRING_MARSHALLER);
+
     public static class StatsOutput extends PTransform<PCollection<Long>, PDone> {
         public StatsOutput(String tag) {
             this.tag = tag;
         }
 
-        private String tag;
+        private final String tag;
 
         @Override
         public PDone expand(PCollection<Long> input) {
             input.apply(ParDo.of(new DoFn<Long, Void>() {
                 @ProcessElement
                 public void processElement(ProcessContext c, BoundedWindow window) {
-                    MessageSender sender = new MessageSender(
-                            tag + "-" + c.element().toString(),
-                            new InetSocketAddress("localhost", 1111)
-                    );
-                    sender.send();
+                    try (final var statsSender = new StatsSender(new InetSocketAddress("localhost", 1111), tag)) {
+                        statsSender.send(
+                                c.timestamp().getMillis(),
+                                Collections.singletonMap("", c.element().doubleValue())
+                        );
+                    }
                 }
             }));
             return PDone.in(input.getPipeline());
@@ -55,56 +60,51 @@ public class StatisticsHandling {
         @Override
         @SuppressWarnings("unused")
         public void run() {
-
-            Selector selector;
-            ServerSocketChannel serverSocket;
-            InetSocketAddress address = new InetSocketAddress("localhost", port);
-            try {
-                selector = Selector.open();
-                serverSocket = ServerSocketChannel.open();
-                serverSocket.bind(address);
-                serverSocket.configureBlocking(false);
-
-                int ops = serverSocket.validOps();
-                SelectionKey selectKy = serverSocket.register(selector, ops, null);
-
-                for (;;) {
-                    selector.select();
-
-                    Set<SelectionKey> selectedKeys = selector.selectedKeys();
-                    Iterator<SelectionKey> selectedKeysIterator = selectedKeys.iterator();
-
-                    while (selectedKeysIterator.hasNext()) {
-                        SelectionKey key = selectedKeysIterator.next();
-                        selectedKeysIterator.remove();
-
-                        if (key.isAcceptable()) {
-                            SocketChannel client = serverSocket.accept();
-
-                            client.configureBlocking(false);
-                            client.register(selector, SelectionKey.OP_READ);
-                            log("Connection Accepted: " + client.getLocalAddress() + "\n");
-
-                        } else if (key.isReadable()) {
-
-                            SocketChannel client = (SocketChannel) key.channel();
-
-                            ByteBuffer buffer = ByteBuffer.allocate(256);
-
-                            if (client.read(buffer) < 0) {
-                                key.cancel();
-                                client.close();
-                                continue;
-                            }
-                            result = new String(buffer.array()).trim();
-
-                            log("Message received: " + result);
+            final var tag = Context.key("user-agent");
+            final var server = ServerBuilder.forPort(port).intercept(new ServerInterceptor() {
+                @Override
+                public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
+                        ServerCall<ReqT, RespT> call, Metadata headers, ServerCallHandler<ReqT, RespT> next
+                ) {
+                    return Contexts.interceptCall(
+                            Context.current().withValue(tag, headers.get(TAG)),
+                            call, headers, next
+                    );
+                }
+            }).addService(new StatsServiceGrpc.StatsServiceImplBase() {
+                @Override
+                public StreamObserver<Services.Stats> push(StreamObserver<Empty> responseObserver) {
+                    result = (String) tag.get();
+                    return new StreamObserver<>() {
+                        @Override
+                        public void onNext(Services.Stats value) {
+                            log("Message received: " + value);
                         }
+
+                        @Override
+                        public void onError(Throwable t) {
+                            log(t.toString());
+                        }
+
+                        @Override
+                        public void onCompleted() {
+                            responseObserver.onCompleted();
+                        }
+                    };
+                }
+            }).build();
+            try (final Closeable ignored = server::shutdown) {
+                server.start();
+                while (true) {
+                    try {
+                        server.awaitTermination();
+                        break;
+                    } catch (InterruptedException e) {
+                        server.shutdownNow();
                     }
                 }
-
             } catch (IOException e) {
-                e.printStackTrace();
+                throw new RuntimeException(e);
             }
         }
 
@@ -113,35 +113,58 @@ public class StatisticsHandling {
         }
     }
 
-    public static class MessageSender {
-        private String messageToSend;
-        private InetSocketAddress address;
+    public static class StatsSender implements AutoCloseable {
+        private final ManagedChannel managedChannel;
+        private final StreamObserver<Services.Stats> stats;
 
-        public MessageSender(String messageToSend, InetSocketAddress address) {
-            this.messageToSend = messageToSend;
-            this.address = address;
+        public StatsSender(InetSocketAddress address, String userAgent) {
+            managedChannel = ManagedChannelBuilder.forAddress(address.getHostName(), address.getPort())
+                    .usePlaintext().intercept(new ClientInterceptor() {
+                        @Override
+                        public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
+                                MethodDescriptor<ReqT, RespT> method, CallOptions callOptions, Channel next
+                        ) {
+                            return new ForwardingClientCall.SimpleForwardingClientCall<>(
+                                    next.newCall(method, callOptions)
+                            ) {
+                                @Override
+                                public void start(Listener<RespT> responseListener, Metadata headers) {
+                                    headers.put(TAG, userAgent);
+                                    super.start(responseListener, headers);
+                                }
+                            };
+                        }
+                    }).build();
+            stats = StatsServiceGrpc.newStub(managedChannel).push(new StreamObserver<>() {
+                @Override
+                public void onNext(Empty value) {
+                }
+
+                @Override
+                public void onError(Throwable t) {
+                }
+
+                @Override
+                public void onCompleted() {
+                }
+            });
         }
 
-        public void send() {
-            try {
-                SocketChannel client = SocketChannel.open(address);
-                log("Connecting to Server on " + address);
+        public void send(long timestamp, Map<String, Double> cardinalities) {
+            stats.onNext(Services.Stats.newBuilder().setTimestamp(timestamp).putAllCardinality(cardinalities).build());
+        }
 
-                byte[] message = messageToSend.getBytes();
-                ByteBuffer buffer = ByteBuffer.wrap(message);
-                client.write(buffer);
-
-                log("sending: " + messageToSend);
-                buffer.clear();
-                client.close();
-            } catch (Exception e) {
-                log("Exception: " + e);
-                e.printStackTrace();
+        @Override
+        public void close() {
+            managedChannel.shutdown();
+            while (true) {
+                try {
+                    managedChannel.awaitTermination(Long.MAX_VALUE, TimeUnit.DAYS);
+                    break;
+                } catch (InterruptedException e) {
+                    managedChannel.shutdownNow();
+                }
             }
-        }
-
-        private void log(String str) {
-            System.out.println(str);
         }
     }
 }

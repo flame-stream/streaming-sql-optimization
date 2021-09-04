@@ -8,6 +8,8 @@ import com.flamestream.optimizer.sql.agents.testutils.TestPipelineOptions;
 import org.junit.Test;
 
 import java.net.InetSocketAddress;
+import java.util.Collections;
+
 import static org.junit.Assert.assertEquals;
 
 public class CoordinatorStatsSourceSinkTest {
@@ -21,16 +23,16 @@ public class CoordinatorStatsSourceSinkTest {
                 ),
                 1111
         );
-        var client = new StatisticsHandling.MessageSender(
-                "my message",
-                new InetSocketAddress("localhost", 1111)
+        var client = new StatisticsHandling.StatsSender(
+                new InetSocketAddress("localhost", 1111),
+                "my message"
         );
 
         var serverThread = new Thread(server);
         serverThread.start();
 
         Thread.sleep(100);
-        client.send();
+        client.send(0, Collections.emptyMap());
         Thread.sleep(100);
         assertEquals("my message", server.result);
 
@@ -47,16 +49,16 @@ public class CoordinatorStatsSourceSinkTest {
                 1112
         );
 
-        var client = new StatisticsHandling.MessageSender(
-                "my message",
-                new InetSocketAddress("localhost", 1112)
+        var client = new StatisticsHandling.StatsSender(
+                new InetSocketAddress("localhost", 1112),
+                "my message"
         );
 
         var serverThread = new Thread(server);
         serverThread.start();
 
         Thread.sleep(100);
-        client.send();
+        client.send(0, Collections.emptyMap());
         Thread.sleep(100);
         assertEquals("my message", server.result);
 

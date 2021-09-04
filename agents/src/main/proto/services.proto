@@ -1,0 +1,24 @@
+syntax = "proto3";
+import "google/protobuf/empty.proto";
+option java_package = "com.flamestream.optimizer.sql.agents";
+
+message Empty {
+}
+
+message Stats {
+  int64 timestamp = 1;
+  map<string, double> cardinality = 2;
+}
+
+message Timestamp {
+  int64 value = 1;
+}
+
+service StatsService {
+  rpc Push(stream Stats) returns (google.protobuf.Empty);
+}
+
+service WorkerService {
+  rpc Pause(Empty) returns (Timestamp);
+  rpc ResumeTo(Timestamp) returns (Empty);
+}
