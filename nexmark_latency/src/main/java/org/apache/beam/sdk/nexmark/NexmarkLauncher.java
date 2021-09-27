@@ -17,12 +17,18 @@
  */
 package org.apache.beam.sdk.nexmark;
 
+import com.flamestream.optimizer.sql.agents.Services;
+import com.flamestream.optimizer.sql.agents.WorkerServiceGrpc;
+import com.flamestream.optimizer.sql.agents.impl.StatisticsHandling;
 import com.google.api.services.bigquery.model.TableFieldSchema;
 import com.google.api.services.bigquery.model.TableRow;
 import com.google.api.services.bigquery.model.TableSchema;
+import io.grpc.ManagedChannelBuilder;
+import io.grpc.stub.StreamObserver;
 import org.apache.beam.repackaged.direct_java.runners.core.construction.renderer.PipelineDotRenderer;
 import org.apache.beam.sdk.Pipeline;
 import org.apache.beam.sdk.PipelineResult;
+import org.apache.beam.sdk.extensions.sql.impl.QueryPlanner;
 import org.apache.beam.sdk.io.AvroIO;
 import org.apache.beam.sdk.io.TextIO;
 import org.apache.beam.sdk.io.gcp.bigquery.BigQueryIO;
@@ -60,7 +66,11 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import static org.apache.beam.sdk.nexmark.NexmarkUtils.PubSubMode.COMBINED;
 import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkArgument;
@@ -1069,7 +1079,7 @@ public class NexmarkLauncher<OptionT extends NexmarkOptions> {
   }
 
   /** Run {@code configuration} and return its performance if possible. */
-  public @Nullable NexmarkPerf run() throws IOException {
+  public @Nullable NexmarkPerf run() throws Exception {
     if (options.getManageResources() && !options.getMonitorJobs()) {
       throw new RuntimeException("If using --manageResources then must also use --monitorJobs.");
     }
@@ -1082,7 +1092,58 @@ public class NexmarkLauncher<OptionT extends NexmarkOptions> {
       pubsubHelper = PubsubHelper.create(options);
     }
 
-    try {
+    try (final var nioServer = new StatisticsHandling.NIOServer(1337, new Function<>() {
+      final ConcurrentHashMap<String, Object> targets = new ConcurrentHashMap<>();
+      final ConcurrentHashMap<Long, ConcurrentHashMap<String, Map<String, Double>>> timeTargetCardinalities =
+              new ConcurrentHashMap<>();
+
+      @Override
+      public StreamObserver<Services.Stats> apply(String target) {
+        final var channel = ManagedChannelBuilder.forTarget(target).build();
+        targets.put(target, channel);
+        final var workerServiceStub = WorkerServiceGrpc.newStub(channel);
+        var nioServer = this;
+        return new StreamObserver<>() {
+          @Override
+          public void onNext(Services.Stats value) {
+            final var targetCardinalities = timeTargetCardinalities
+                    .computeIfAbsent(value.getTimestamp(), __ -> new ConcurrentHashMap<>());
+            targetCardinalities.put(target, value.getCardinalityMap());
+            if (
+                    targetCardinalities.size() == targets.size()
+                            && timeTargetCardinalities.remove(value.getTimestamp()) != null
+            ) {
+              System.out.println(value.getTimestamp() + " " + sum(targetCardinalities));
+            }
+          }
+
+          private Map<String, Double> sum(ConcurrentHashMap<String, Map<String, Double>> cardinalities) {
+            return cardinalities.values().stream().flatMap(targetCardinalities ->
+                    targetCardinalities.entrySet().stream()
+            ).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, Double::sum));
+          }
+
+          @Override
+          public void onError(Throwable t) {
+          }
+
+          @Override
+          public void onCompleted() {
+            channel.shutdown();
+            while (true) {
+              try {
+                if (channel.awaitTermination(Long.MAX_VALUE, TimeUnit.DAYS)) {
+                  break;
+                }
+              } catch (InterruptedException e) {
+                channel.shutdownNow();
+              }
+            }
+            targets.remove(target);
+          }
+        };
+      }
+    })) {
       NexmarkUtils.console("Running %s", configuration.toShortString());
 
       NexmarkUtils.console("Configuration %s", configuration.toString());
@@ -1288,7 +1349,14 @@ public class NexmarkLauncher<OptionT extends NexmarkOptions> {
                 configuration,
                 SqlBoundedSideInputJoin.calciteSqlBoundedSideInputJoin(configuration)))
         .put(NexmarkQueryName.TEST_SQL_QUERY, new NexmarkQuery(configuration, new SqlQuery15(configuration)))
-        .put(NexmarkQueryName.LATENCY_SQL_QUERY_1, new NexmarkQuery(configuration, new SqlQuery16(configuration)))
+        .put(NexmarkQueryName.LATENCY_SQL_QUERY_1, new NexmarkQuery(configuration, new SqlQuery16(
+                configuration,
+                QueryPlanner.QueryParameters.ofNamed(Map.ofEntries(
+                        Map.entry("table_column_distinct_row_count:Bid.bidder", 100),
+                        Map.entry("table_column_distinct_row_count:Person.id", 1000),
+                        Map.entry("table_column_distinct_row_count:Auction.seller", 1000)
+                ))
+        )))
         .put(NexmarkQueryName.LATENCY_SQL_QUERY_2, new NexmarkQuery(configuration, new SqlQuery17(configuration)))
         .put(NexmarkQueryName.TEST_SQL_QUERY_TIMES, new NexmarkQuery(configuration, new SqlQuery18(configuration)))
         .put(NexmarkQueryName.TEST_SQL_QUERY_TIMES_AND_RES,

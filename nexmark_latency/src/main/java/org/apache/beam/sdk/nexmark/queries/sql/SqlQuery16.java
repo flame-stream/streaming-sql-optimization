@@ -17,6 +17,10 @@
  */
 package org.apache.beam.sdk.nexmark.queries.sql;
 
+import com.flamestream.optimizer.sql.agents.impl.StatisticsHandling;
+import org.apache.beam.sdk.coders.KvCoder;
+import org.apache.beam.sdk.coders.VarLongCoder;
+import org.apache.beam.sdk.coders.VoidCoder;
 import org.apache.beam.sdk.extensions.sql.impl.ModifiedCalciteQueryPlanner;
 import org.apache.beam.sdk.extensions.sql.impl.QueryPlanner;
 import org.apache.beam.sdk.extensions.sql.impl.rel.BeamSqlRelUtils;
@@ -32,7 +36,6 @@ import org.apache.beam.sdk.nexmark.model.sql.SelectEvent;
 import org.apache.beam.sdk.nexmark.queries.NexmarkQueryTransform;
 import org.apache.beam.sdk.schemas.Schema;
 import org.apache.beam.sdk.transforms.*;
-import org.apache.beam.sdk.transforms.windowing.BoundedWindow;
 import org.apache.beam.sdk.transforms.windowing.FixedWindows;
 import org.apache.beam.sdk.transforms.windowing.Window;
 import org.apache.beam.sdk.values.*;
@@ -40,6 +43,8 @@ import org.joda.time.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.net.InetSocketAddress;
+import java.util.List;
 import java.util.Map;
 
 import static org.apache.beam.sdk.nexmark.counting.SqlCounter.applyCountingVer2;
@@ -59,12 +64,6 @@ public class SqlQuery16 extends NexmarkQueryTransform<Latency> {
             + "    Auction A INNER JOIN Person P on A.seller = P.id "
             + "       INNER JOIN Bid B on B.bidder = P.id" +
             "";
-    private static final String STATS_QUERY = "" +
-            "SELECT person_ids.number, auction_sellers.number, bid_bidders.number" +
-            " FROM (SELECT 0 AS key, COUNT(*) AS number FROM (SELECT DISTINCT bidder FROM Bid)) AS bid_bidders" +
-            " JOIN (SELECT 0 AS key, COUNT(*) AS number FROM (SELECT DISTINCT id FROM Person)) AS person_ids ON bid_bidders.key = person_ids.key " +
-            " JOIN (SELECT 0 AS key, COUNT(*) AS number FROM (SELECT DISTINCT seller FROM Auction)) AS auction_sellers ON person_ids.key = auction_sellers.key" +
-            "";
     public static final QueryPlanner.QueryParameters QUERY_PARAMETERS = QueryPlanner.QueryParameters.ofNamed(Map.ofEntries(
             Map.entry("table_column_distinct_row_count:Bid.bidder", 100),
             Map.entry("table_column_distinct_row_count:Person.id", 1000),
@@ -74,11 +73,13 @@ public class SqlQuery16 extends NexmarkQueryTransform<Latency> {
     private final NexmarkSqlEnv query;
 
     private final NexmarkConfiguration configuration;
+    private final QueryPlanner.QueryParameters queryParameters;
 
-    public SqlQuery16(NexmarkConfiguration configuration) {
+    public SqlQuery16(NexmarkConfiguration configuration, QueryPlanner.QueryParameters queryParameters) {
         super("SqlQuery16");
 
         this.configuration = configuration;
+        this.queryParameters = queryParameters;
         query = NexmarkSqlEnv.build().withQueryPlannerClass(ModifiedCalciteQueryPlanner.class);
     }
 
@@ -135,26 +136,32 @@ public class SqlQuery16 extends NexmarkQueryTransform<Latency> {
         PCollectionTuple withTags = PCollectionTuple.of(bidTag, bids)
                 .and(auctionTag, auctions)
                 .and(personTag, people);
+        PCollectionList.of(List.of(
+                bids.apply(ParDo.of(new CardinalityKVDoFn<Long>("bidder"))).setCoder(KvCoder.of(VarLongCoder.of(), VoidCoder.of()))
+                        .apply(Combine.perKey(Count.combineFn()))
+                        .apply(ParDo.of(new StatisticsHandling.LocalCardinalityDoFn("table_column_distinct_row_count:Bid.bidder"))),
+                auctions.apply(ParDo.of(new CardinalityKVDoFn<Long>("seller"))).setCoder(KvCoder.of(VarLongCoder.of(), VoidCoder.of()))
+                        .apply(Combine.perKey(Count.combineFn()))
+                        .apply(ParDo.of(new StatisticsHandling.LocalCardinalityDoFn("table_column_distinct_row_count:Auction.seller"))),
+                people.apply(ParDo.of(new CardinalityKVDoFn<Long>("id"))).setCoder(KvCoder.of(VarLongCoder.of(), VoidCoder.of()))
+                        .apply(Combine.perKey(Count.combineFn()))
+                        .apply(ParDo.of(new StatisticsHandling.LocalCardinalityDoFn("table_column_distinct_row_count:Person.id")))
+        )).apply(Flatten.pCollections()).apply(ParDo.of(new StatisticsHandling.StatsDoFn(new InetSocketAddress(1337), 3)));
 
         if (configuration.counting) {
             // applyCounting(withTags, configuration);
             applyCountingVer2(withTags, configuration);
         }
 
-        final var output = withTags.apply(new PTransform<PInput, PCollectionTuple>() {
+        final var results = withTags.apply(new PTransform<PInput, PCollectionTuple>() {
             @Override
             public PCollectionTuple expand(PInput input) {
-                final var sqlEnv = query.apply(input);
                 return PCollectionTuple.of(
                         MAIN,
-                        BeamSqlRelUtils.toPCollection(input.getPipeline(), sqlEnv.parseQuery(QUERY_1, QUERY_PARAMETERS))
-                ).and(
-                        STATS,
-                        BeamSqlRelUtils.toPCollection(input.getPipeline(), sqlEnv.parseQuery(STATS_QUERY, QUERY_PARAMETERS))
+                        BeamSqlRelUtils.toPCollection(input.getPipeline(), query.apply(input).parseQuery(QUERY_1, queryParameters))
                 );
             }
-        });
-        PCollection<Row> results = output.get(MAIN);
+        }).get(MAIN);
 
         // adding arrival (from join) time for each tuple to be used for latency calculation
         Schema withArrivalTime = Schema.builder()
@@ -172,21 +179,20 @@ public class SqlQuery16 extends NexmarkQueryTransform<Latency> {
                         .withWindowedWrites()
                         .withNumShards(1)
                         .withSuffix(".txt"));
-        output.get(STATS).apply(new Output());
 
         return latency;
     }
 
-    public static class Output extends PTransform<PCollection<Row>, PDone> {
-        @Override
-        public PDone expand(PCollection<Row> input) {
-            input.apply(ParDo.of(new DoFn<Row, Void>() {
-                @ProcessElement
-                public void processElement(ProcessContext c, BoundedWindow window) {
-                    NexmarkSqlEnv.build().withQueryPlannerClass(ModifiedCalciteQueryPlanner.class);
-                }
-            }));
-            return PDone.in(input.getPipeline());
+    public static class CardinalityKVDoFn<T> extends DoFn<Row, KV<T, Void>> {
+        private final String fieldName;
+
+        public CardinalityKVDoFn(String fieldName) {
+            this.fieldName = fieldName;
+        }
+
+        @ProcessElement
+        public void processElement(ProcessContext context) {
+            context.output(KV.of(context.element().getValue(fieldName), null));
         }
     }
 }

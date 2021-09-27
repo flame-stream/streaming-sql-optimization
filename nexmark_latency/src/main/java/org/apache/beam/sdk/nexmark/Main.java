@@ -96,7 +96,7 @@ public class Main {
     }
 
     @Override
-    public Result call() throws IOException {
+    public Result call() throws Exception {
       NexmarkPerf perf = nexmarkLauncher.run();
       return new Result(configuration, perf);
     }

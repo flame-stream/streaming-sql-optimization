@@ -2,114 +2,198 @@ package com.flamestream.optimizer.sql.agents.impl;
 
 import com.flamestream.optimizer.sql.agents.Services;
 import com.flamestream.optimizer.sql.agents.StatsServiceGrpc;
+import com.flamestream.optimizer.sql.agents.WorkerServiceGrpc;
 import com.google.protobuf.Empty;
 import io.grpc.*;
 import io.grpc.stub.StreamObserver;
+import org.apache.beam.sdk.state.StateSpec;
+import org.apache.beam.sdk.state.StateSpecs;
+import org.apache.beam.sdk.state.ValueState;
 import org.apache.beam.sdk.transforms.DoFn;
-import org.apache.beam.sdk.transforms.PTransform;
-import org.apache.beam.sdk.transforms.ParDo;
 import org.apache.beam.sdk.transforms.windowing.BoundedWindow;
-import org.apache.beam.sdk.values.PCollection;
-import org.apache.beam.sdk.values.PDone;
+import org.apache.beam.sdk.values.KV;
+import org.joda.time.Instant;
 
-import java.io.Closeable;
 import java.io.IOException;
+import java.net.DatagramSocket;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
-import java.util.Collections;
+import java.net.SocketException;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
 
 public class StatisticsHandling {
-    private static final Metadata.Key<String> TAG = Metadata.Key.of("tag", Metadata.ASCII_STRING_MARSHALLER);
+    private static final Metadata.Key<String> TARGET_KEY = Metadata.Key.of("target", Metadata.ASCII_STRING_MARSHALLER);
 
-    public static class StatsOutput extends PTransform<PCollection<Long>, PDone> {
-        public StatsOutput(String tag) {
-            this.tag = tag;
+    public static class LocalCardinalityDoFn extends DoFn<KV<Long, Long>, KV<String, Double>> {
+        private final String column;
+        @StateId("void")
+        private final StateSpec<ValueState<Void>> ignored = StateSpecs.value();
+        private BoundedWindow boundedWindow;
+        private int i = 0;
+
+        public LocalCardinalityDoFn(String column) {
+            this.column = column;
         }
 
-        private final String tag;
+        @ProcessElement
+        public void processElement(ProcessContext c, BoundedWindow window) {
+        }
 
-        @Override
-        public PDone expand(PCollection<Long> input) {
-            input.apply(ParDo.of(new DoFn<Long, Void>() {
-                @ProcessElement
-                public void processElement(ProcessContext c, BoundedWindow window) {
-                    try (final var statsSender = new StatsSender(new InetSocketAddress("localhost", 1111), tag)) {
-                        statsSender.send(
-                                c.timestamp().getMillis(),
-                                Collections.singletonMap("", c.element().doubleValue())
-                        );
-                    }
-                }
-            }));
-            return PDone.in(input.getPipeline());
+        @OnWindowExpiration
+        public void onWindowExpiration(BoundedWindow boundedWindow) {
+            this.boundedWindow = boundedWindow;
+            ++i;
+        }
+
+        @FinishBundle
+        public void finishBundle(FinishBundleContext finishBundleContext) {
+            finishBundleContext.output(KV.of(column, (double) i), boundedWindow.maxTimestamp(), boundedWindow);
+            i = 0;
         }
     }
 
-    public static class NIOServer implements Runnable {
-        private final int port;
+    public static class StatsDoFn extends DoFn<KV<String, Double>, Void> {
+        private final InetSocketAddress executorAddress;
+        private final int cardinalitiesNumber;
+        private String userAgent;
 
-        public NIOServer(CoordinatorImpl coordinator, int port) {
-            this.coordinator = coordinator;
-            this.port = port;
+        public StatsDoFn(InetSocketAddress executorAddress, int cardinalitiesNumber) {
+            this.executorAddress = executorAddress;
+            this.cardinalitiesNumber = cardinalitiesNumber;
         }
 
-        public final CoordinatorImpl coordinator;
-        public String result;
+        private StatsSender statsSender;
+        private Server workerService;
 
-        @Override
-        @SuppressWarnings("unused")
-        public void run() {
-            final var tag = Context.key("user-agent");
-            final var server = ServerBuilder.forPort(port).intercept(new ServerInterceptor() {
+        private final TreeMap<Instant, Map<String, Double>> pendingCardinality = new TreeMap<>();
+
+        @Setup
+        public void setup() throws IOException {
+            workerService = ServerBuilder.forPort(0).addService(new WorkerServiceGrpc.WorkerServiceImplBase() {
+                @Override
+                public void pause(Services.Empty request, StreamObserver<Services.Timestamp> responseObserver) {
+                    System.out.println("pause");
+                    responseObserver.onNext(Services.Timestamp.getDefaultInstance());
+                    responseObserver.onCompleted();
+                }
+
+                @Override
+                public void resumeTo(Services.Timestamp request, StreamObserver<Services.Empty> responseObserver) {
+                    System.out.println("resume to " + request.getValue());
+                    responseObserver.onCompleted();
+                }
+            }).build();
+            workerService.start();
+            userAgent = getLocalAddress().getHostAddress() + ":" + workerService.getPort();
+            statsSender = new StatsSender(executorAddress, userAgent);
+        }
+
+        @ProcessElement
+        public void processElement(ProcessContext c, BoundedWindow window) {
+            if (
+                    pendingCardinality.computeIfAbsent(window.maxTimestamp(), __ -> new HashMap<>())
+                            .putIfAbsent(c.element().getKey(), c.element().getValue()) != null
+            ) {
+                throw new IllegalStateException();
+            }
+        }
+
+        @FinishBundle
+        public void finishBundle() {
+            final var timeCardinalityIterator = pendingCardinality.entrySet().iterator();
+            while (timeCardinalityIterator.hasNext()) {
+                final var timeCardinality = timeCardinalityIterator.next();
+                if (timeCardinality.getValue().size() == cardinalitiesNumber) {
+                    final var millis = timeCardinality.getKey().getMillis();
+                    statsSender.send(millis, timeCardinality.getValue());
+                    timeCardinalityIterator.remove();
+                }
+            }
+        }
+
+        @Teardown
+        public void teardown() {
+            statsSender.close();
+            workerService.shutdown();
+            while (true) {
+                try {
+                    workerService.awaitTermination();
+                    return;
+                } catch (InterruptedException e) {
+                    workerService.shutdownNow();
+                }
+            }
+        }
+
+        private InetAddress getLocalAddress() throws SocketException {
+            try (final var datagramSocket = new DatagramSocket()) {
+                datagramSocket.connect(executorAddress);
+                return datagramSocket.getLocalAddress();
+            }
+        }
+    }
+
+    public static class NIOServer implements AutoCloseable {
+        private final Server server;
+
+        public NIOServer(
+                int port, Function<String, StreamObserver<Services.Stats>> targetStatsObserver
+        ) throws IOException {
+            final var targetKey = Context.key("target");
+            this.server = ServerBuilder.forPort(port).intercept(new ServerInterceptor() {
                 @Override
                 public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
                         ServerCall<ReqT, RespT> call, Metadata headers, ServerCallHandler<ReqT, RespT> next
                 ) {
                     return Contexts.interceptCall(
-                            Context.current().withValue(tag, headers.get(TAG)),
+                            Context.current().withValue(targetKey, headers.get(TARGET_KEY)),
                             call, headers, next
                     );
                 }
             }).addService(new StatsServiceGrpc.StatsServiceImplBase() {
                 @Override
                 public StreamObserver<Services.Stats> push(StreamObserver<Empty> responseObserver) {
-                    result = (String) tag.get();
+                    final var statsStreamObserver = targetStatsObserver.apply((String) targetKey.get());
                     return new StreamObserver<>() {
                         @Override
                         public void onNext(Services.Stats value) {
-                            log("Message received: " + value);
+                            statsStreamObserver.onNext(value);
                         }
 
                         @Override
                         public void onError(Throwable t) {
-                            log(t.toString());
+                            statsStreamObserver.onError(t);
                         }
 
                         @Override
                         public void onCompleted() {
+                            statsStreamObserver.onCompleted();
+                            responseObserver.onNext(Empty.getDefaultInstance());
                             responseObserver.onCompleted();
                         }
                     };
                 }
             }).build();
-            try (final Closeable ignored = server::shutdown) {
-                server.start();
-                while (true) {
-                    try {
-                        server.awaitTermination();
-                        break;
-                    } catch (InterruptedException e) {
-                        server.shutdownNow();
-                    }
-                }
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
+            server.start();
         }
 
-        private void log(String str) {
-            System.out.println(str);
+        public String result;
+
+        @Override
+        public void close() throws Exception {
+            server.shutdown();
+            while (true) {
+                try {
+                    server.awaitTermination();
+                    break;
+                } catch (InterruptedException e) {
+                    server.shutdownNow();
+                }
+            }
         }
     }
 
@@ -117,7 +201,7 @@ public class StatisticsHandling {
         private final ManagedChannel managedChannel;
         private final StreamObserver<Services.Stats> stats;
 
-        public StatsSender(InetSocketAddress address, String userAgent) {
+        public StatsSender(InetSocketAddress address, String target) {
             managedChannel = ManagedChannelBuilder.forAddress(address.getHostName(), address.getPort())
                     .usePlaintext().intercept(new ClientInterceptor() {
                         @Override
@@ -129,7 +213,7 @@ public class StatisticsHandling {
                             ) {
                                 @Override
                                 public void start(Listener<RespT> responseListener, Metadata headers) {
-                                    headers.put(TAG, userAgent);
+                                    headers.put(TARGET_KEY, target);
                                     super.start(responseListener, headers);
                                 }
                             };
@@ -142,6 +226,7 @@ public class StatisticsHandling {
 
                 @Override
                 public void onError(Throwable t) {
+                    t.printStackTrace();
                 }
 
                 @Override
@@ -156,6 +241,7 @@ public class StatisticsHandling {
 
         @Override
         public void close() {
+            stats.onCompleted();
             managedChannel.shutdown();
             while (true) {
                 try {

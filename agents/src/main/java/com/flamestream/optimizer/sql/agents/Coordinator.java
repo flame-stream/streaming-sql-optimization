@@ -31,7 +31,7 @@ public interface Coordinator {
 
     RunningSqlQueryJob start(SqlQueryJob sqlQueryJob);
     void stop(RunningSqlQueryJob runningSqlQueryJob);
-    Stream<RunningSqlQueryJob> runningJobs();
+    Stream<? extends RunningSqlQueryJob> runningJobs();
 
     interface SqlQueryJob {
         String query();

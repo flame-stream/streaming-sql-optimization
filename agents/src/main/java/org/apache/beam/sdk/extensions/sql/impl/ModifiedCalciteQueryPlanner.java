@@ -184,7 +184,12 @@ public class ModifiedCalciteQueryPlanner implements QueryPlanner {
             RelMetadataQuery.THREAD_PROVIDERS.set(
                     JaninoRelMetadataProvider.of(root.rel.getCluster().getMetadataProvider()));
             root.rel.getCluster().invalidateMetadataQuery();
-            beamRelNode = (BeamRelNode) planner.transform(0, desiredTraits, root.rel);
+            final var metadataProvider = root.rel.getCluster().getMetadataProvider();
+            try {
+                beamRelNode = (BeamRelNode) planner.transform(0, desiredTraits, root.rel);
+            } finally {
+                root.rel.getCluster().setMetadataProvider(metadataProvider);
+            }
             LOG.info("BEAMPlan>\n" + RelOptUtil.toString(beamRelNode));
         } catch (RelConversionException | CannotPlanException e) {
             throw new SqlConversionException(
@@ -237,6 +242,9 @@ public class ModifiedCalciteQueryPlanner implements QueryPlanner {
 
         @SuppressWarnings("UnusedDeclaration")
         public Double getDistinctRowCount(BeamIOSourceRel rel, RelMetadataQuery mq, ImmutableBitSet groupKey, RexNode predicate) {
+            if (queryParameters.getKind() != QueryParameters.Kind.NAMED) {
+                return null;
+            }
             if ((predicate == null || predicate.isAlwaysTrue()) && groupKey.cardinality() == 1) {
                 final var distinctRowCount =
                         queryParameters.named().get("table_column_distinct_row_count:" + Stream.concat(
