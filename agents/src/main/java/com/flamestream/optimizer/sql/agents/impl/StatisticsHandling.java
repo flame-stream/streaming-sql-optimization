@@ -222,6 +222,7 @@ public class StatisticsHandling {
             stats = StatsServiceGrpc.newStub(managedChannel).push(new StreamObserver<>() {
                 @Override
                 public void onNext(Empty value) {
+                    System.out.println("debug");
                 }
 
                 @Override

@@ -1,6 +1,7 @@
 plugins {
     id 'java'
     id 'com.google.protobuf' version '0.8.17'
+    id 'idea'
 }
 
 repositories {
@@ -58,5 +59,19 @@ protobuf {
     }
     generateProtoTasks {
         all()*.plugins { grpc {} }
+    }
+    generatedFilesBaseDir = "$projectDir/gen"
+}
+
+clean {
+    delete protobuf.generatedFilesBaseDir
+}
+
+idea {
+    module {
+        // proto files and generated Java files are automatically added as
+        // source dirs.
+        // If you have additional sources, add them here:
+//        sourceDirs += file("/path/to/other/sources");
     }
 }
