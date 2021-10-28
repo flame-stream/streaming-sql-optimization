@@ -6,6 +6,7 @@ import org.junit.Test;
 
 import java.net.InetSocketAddress;
 import java.util.Collections;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 
 import static org.junit.Assert.assertEquals;
@@ -13,12 +14,12 @@ import static org.junit.Assert.assertEquals;
 public class CoordinatorStatsSourceSinkTest {
     @Test
     public void simpleTest() throws Exception {
-        final var targetStreamObserver = new Function<String, StreamObserver<Services.Stats>>() {
+        final var targetStreamObserver = new BiFunction<String, String, StreamObserver<Services.Stats>>() {
             String target;
             Services.Stats stats;
 
             @Override
-            public StreamObserver<Services.Stats> apply(String target) {
+            public StreamObserver<Services.Stats> apply(String target, String another) {
                 this.target = target;
                 return new StreamObserver<>() {
                     @Override
@@ -41,7 +42,7 @@ public class CoordinatorStatsSourceSinkTest {
                 var ignored = new StatisticsHandling.NIOServer(1111, targetStreamObserver);
                 var client = new StatisticsHandling.StatsSender(
                         new InetSocketAddress("localhost", 1111),
-                        "my message"
+                        "my message", Collections.emptyList()
                 )
         ) {
             client.send(1, Collections.singletonMap("bid", 1.));

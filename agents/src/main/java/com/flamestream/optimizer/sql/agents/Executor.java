@@ -10,7 +10,9 @@ import java.util.function.Consumer;
  * specific stream processing system.
  */
 public interface Executor {
-    void startOrUpdate(Pipeline pipeline, Consumer<ChangingStatus> statusConsumer);
+    void startOrUpdate(Pipeline pipeline, Consumer<ChangingStatus> statusConsumer) throws InterruptedException;
+
+    void submitSource(String sourceHostAndPort);
 
     @Nullable
     Pipeline current();

@@ -44,6 +44,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.InetSocketAddress;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -146,7 +147,7 @@ public class SqlQuery16 extends NexmarkQueryTransform<Latency> {
                 people.apply(ParDo.of(new CardinalityKVDoFn<Long>("id"))).setCoder(KvCoder.of(VarLongCoder.of(), VoidCoder.of()))
                         .apply(Combine.perKey(Count.combineFn()))
                         .apply(ParDo.of(new StatisticsHandling.LocalCardinalityDoFn("table_column_distinct_row_count:Person.id")))
-        )).apply(Flatten.pCollections()).apply(ParDo.of(new StatisticsHandling.StatsDoFn(new InetSocketAddress(1337), 3)));
+        )).apply(Flatten.pCollections()).apply(ParDo.of(new StatisticsHandling.StatsDoFn(new InetSocketAddress(1337), 3, Collections.emptyList())));
 
         if (configuration.counting) {
             // applyCounting(withTags, configuration);

@@ -69,6 +69,7 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -1092,13 +1093,14 @@ public class NexmarkLauncher<OptionT extends NexmarkOptions> {
       pubsubHelper = PubsubHelper.create(options);
     }
 
-    try (final var nioServer = new StatisticsHandling.NIOServer(1337, new Function<>() {
+    try (final var nioServer = new StatisticsHandling.NIOServer(1337, new BiFunction<>() {
       final ConcurrentHashMap<String, Object> targets = new ConcurrentHashMap<>();
       final ConcurrentHashMap<Long, ConcurrentHashMap<String, Map<String, Double>>> timeTargetCardinalities =
               new ConcurrentHashMap<>();
 
+      // TODO is worker necessary here
       @Override
-      public StreamObserver<Services.Stats> apply(String target) {
+      public StreamObserver<Services.Stats> apply(String target, String worker) {
         final var channel = ManagedChannelBuilder.forTarget(target).build();
         targets.put(target, channel);
         final var workerServiceStub = WorkerServiceGrpc.newStub(channel);

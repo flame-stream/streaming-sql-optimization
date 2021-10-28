@@ -1,5 +1,6 @@
 package com.flamestream.optimizer.sql.agents;
 
+import com.flamestream.optimizer.sql.agents.impl.CostEstimatorImpl;
 import com.flamestream.optimizer.sql.agents.testutils.TestSource;
 import com.flamestream.optimizer.testutils.TestUnboundedRowSource;
 import org.apache.beam.sdk.io.TextIO;
@@ -37,7 +38,13 @@ public class CoordinatorExecutorPipelineTest {
         final Coordinator.SqlQueryJob job = new Coordinator.SqlQueryJob() {
             @Override
             public String query() {
-                return "SELECT * FROM Bid";
+                return ""
+                        + " SELECT "
+                        + "    *   "
+                        + " FROM   "
+                        + "    Auction A INNER JOIN Person P on A.seller = P.id "
+                        + "       INNER JOIN Bid B on B.bidder = P.id" +
+                        "";
             }
 
             @Override
@@ -60,8 +67,8 @@ public class CoordinatorExecutorPipelineTest {
         };
 
         // should probably be configured some other way but this was the easiest
-        final String[] args = ("--runner=FlinkRunner --query=16 --queryLanguage=sql --streaming=true --manageResources=false --monitorJobs=true --flinkMaster=[local] --tempLocation=" + folder.getRoot().getAbsolutePath()).split(" ");
+        final String[] args = ("--runner=FlinkRunner --query=16 --queryLanguage=sql --streaming=true --manageResources=false --monitorJobs=true --flinkMaster=localhost:8081 --tempLocation=" + folder.getRoot().getAbsolutePath()).split(" ");
         final PipelineOptions options = PipelineOptionsFactory.fromArgs(args).withValidation().as(NexmarkOptions.class);
-        CoordinatorExecutorPipeline.fromUserQuery(null, List.of(source), job, options);
+        CoordinatorExecutorPipeline.fromUserQuery(new CostEstimatorImpl(), List.of(source), job, options);
     }
 }

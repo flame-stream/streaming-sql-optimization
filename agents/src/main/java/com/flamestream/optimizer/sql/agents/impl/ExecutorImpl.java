@@ -2,10 +2,8 @@ package com.flamestream.optimizer.sql.agents.impl;
 
 import com.flamestream.optimizer.sql.agents.Executor;
 import com.flamestream.optimizer.sql.agents.Services;
-import com.flamestream.optimizer.sql.agents.StatsServiceGrpc;
 import com.flamestream.optimizer.sql.agents.WorkerServiceGrpc;
 import com.flamestream.optimizer.sql.agents.source.SourceWrapper;
-import com.google.protobuf.Empty;
 import io.grpc.*;
 import io.grpc.stub.StreamObserver;
 import org.apache.beam.runners.flink.FlinkRunner;
@@ -18,10 +16,11 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import javax.annotation.Nullable;
 import java.io.Serializable;
 import java.net.InetSocketAddress;
-import java.util.Map;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
-import java.util.stream.Stream;
 
 public class ExecutorImpl implements Executor, Serializable {
     private Pipeline currentPipeline = null;
@@ -29,29 +28,49 @@ public class ExecutorImpl implements Executor, Serializable {
     // some kind of watermark
     private long timestamp = -1;
     private final PipelineOptions options;
+    private CountDownLatch latch = null;
+
+    private final List<SourceCommunicator> sources;
 
     // TODO i have zero idea
     private final String tag = "user-agent";
 
     public ExecutorImpl(final PipelineOptions options) {
         this.options = options;
+        this.sources = new ArrayList<>();
     }
 
     @Override
-    public void startOrUpdate(Pipeline pipeline, Consumer<ChangingStatus> statusConsumer) {
+    public void submitSource(String sourceHostAndPort) {
+        final String host = sourceHostAndPort.substring(0, sourceHostAndPort.lastIndexOf(':'));
+        final int port = Integer.parseInt(sourceHostAndPort.substring(sourceHostAndPort.lastIndexOf(':') + 1));
+        sources.add(new SourceCommunicator(new InetSocketAddress(host, port), tag));
+        if (latch != null) {
+            latch.countDown();
+        }
+    }
+
+    @Override
+    public void startOrUpdate(Pipeline pipeline, Consumer<ChangingStatus> statusConsumer) throws InterruptedException {
+        final PipelineRunner<@NonNull PipelineResult> runner = FlinkRunner.fromOptions(options);
+        runner.run(pipeline);
+
         if (currentPipeline != null) {
-            sourceCommunicator.pause();
-            // TODO wait until it has been completed, so we need to get an acknowledgement from the source somehow
+            for (SourceCommunicator source : sources) {
+                source.pause();
+            }
+            latch = new CountDownLatch(sources.size());
+            latch.await();
+            /*for (SourceCommunicator source : sources) {
+                source.resumeAtTimestamp();
+            }*/
         }
 
 
         currentPipeline = pipeline;
         // TODO random choice of available port?
-        sourceCommunicator = new SourceCommunicator(new InetSocketAddress("localhost", 9000), tag);
-        sourceCommunicator.resumeAtTimestamp(timestamp);
-
-        final PipelineRunner<@NonNull PipelineResult> runner = FlinkRunner.fromOptions(options);
-        runner.run(pipeline);
+        /*sourceCommunicator = new SourceCommunicator(new InetSocketAddress("localhost", 9000), tag);
+        sourceCommunicator.resumeAtTimestamp(timestamp);*/
     }
 
     @Nullable

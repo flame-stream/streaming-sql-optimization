@@ -2,7 +2,7 @@ package com.flamestream.optimizer.sql.agents.impl;
 
 import com.flamestream.optimizer.sql.agents.Services;
 import com.flamestream.optimizer.sql.agents.StatsServiceGrpc;
-import com.flamestream.optimizer.sql.agents.WorkerServiceGrpc;
+import com.flamestream.optimizer.sql.agents.source.SourceWrapper;
 import com.google.protobuf.Empty;
 import io.grpc.*;
 import io.grpc.stub.StreamObserver;
@@ -20,13 +20,18 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.SocketException;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 
 public class StatisticsHandling {
     private static final Metadata.Key<String> TARGET_KEY = Metadata.Key.of("target", Metadata.ASCII_STRING_MARSHALLER);
+    private static final Metadata.Key<String> WORKER_KEY = Metadata.Key.of("worker", Metadata.ASCII_STRING_MARSHALLER);
+    public static final int STATS_PORT = 9004;
+    public static int workerPortNumber = 10000;
 
     public static class LocalCardinalityDoFn extends DoFn<KV<Long, Long>, KV<String, Double>> {
         private final String column;
@@ -60,36 +65,23 @@ public class StatisticsHandling {
         private final InetSocketAddress executorAddress;
         private final int cardinalitiesNumber;
         private String userAgent;
+        private final List<String> sourceAddresses;
 
-        public StatsDoFn(InetSocketAddress executorAddress, int cardinalitiesNumber) {
+        public StatsDoFn(InetSocketAddress executorAddress, int cardinalitiesNumber, List<String> sourceAddresses) {
             this.executorAddress = executorAddress;
             this.cardinalitiesNumber = cardinalitiesNumber;
+            this.sourceAddresses = sourceAddresses;
         }
 
         private StatsSender statsSender;
-        private Server workerService;
 
         private final TreeMap<Instant, Map<String, Double>> pendingCardinality = new TreeMap<>();
 
         @Setup
         public void setup() throws IOException {
-            workerService = ServerBuilder.forPort(0).addService(new WorkerServiceGrpc.WorkerServiceImplBase() {
-                @Override
-                public void pause(Services.Empty request, StreamObserver<Services.Timestamp> responseObserver) {
-                    System.out.println("pause");
-                    responseObserver.onNext(Services.Timestamp.getDefaultInstance());
-                    responseObserver.onCompleted();
-                }
-
-                @Override
-                public void resumeTo(Services.Timestamp request, StreamObserver<Services.Empty> responseObserver) {
-                    System.out.println("resume to " + request.getValue());
-                    responseObserver.onCompleted();
-                }
-            }).build();
-            workerService.start();
-            userAgent = getLocalAddress().getHostAddress() + ":" + workerService.getPort();
-            statsSender = new StatsSender(executorAddress, userAgent);
+            userAgent = getLocalAddress().getHostAddress() + ":" + STATS_PORT;
+            System.out.println("user agent" + userAgent);
+            statsSender = new StatsSender(executorAddress, userAgent, sourceAddresses);
         }
 
         @ProcessElement
@@ -118,15 +110,6 @@ public class StatisticsHandling {
         @Teardown
         public void teardown() {
             statsSender.close();
-            workerService.shutdown();
-            while (true) {
-                try {
-                    workerService.awaitTermination();
-                    return;
-                } catch (InterruptedException e) {
-                    workerService.shutdownNow();
-                }
-            }
         }
 
         private InetAddress getLocalAddress() throws SocketException {
@@ -141,23 +124,27 @@ public class StatisticsHandling {
         private final Server server;
 
         public NIOServer(
-                int port, Function<String, StreamObserver<Services.Stats>> targetStatsObserver
+                int port, BiFunction<String, String, StreamObserver<Services.Stats>> targetStatsObserver
         ) throws IOException {
             final var targetKey = Context.key("target");
+            final var workerKey = Context.key("worker");
             this.server = ServerBuilder.forPort(port).intercept(new ServerInterceptor() {
                 @Override
                 public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
                         ServerCall<ReqT, RespT> call, Metadata headers, ServerCallHandler<ReqT, RespT> next
                 ) {
+                    System.out.println("worker key" + headers.get(WORKER_KEY));
                     return Contexts.interceptCall(
-                            Context.current().withValue(targetKey, headers.get(TARGET_KEY)),
+                            Context.current()
+                                    .withValue(targetKey, headers.get(TARGET_KEY))
+                                    .withValue(workerKey, headers.get(WORKER_KEY)),
                             call, headers, next
                     );
                 }
             }).addService(new StatsServiceGrpc.StatsServiceImplBase() {
                 @Override
                 public StreamObserver<Services.Stats> push(StreamObserver<Empty> responseObserver) {
-                    final var statsStreamObserver = targetStatsObserver.apply((String) targetKey.get());
+                    final var statsStreamObserver = targetStatsObserver.apply((String) targetKey.get(), (String) workerKey.get());
                     return new StreamObserver<>() {
                         @Override
                         public void onNext(Services.Stats value) {
@@ -200,8 +187,9 @@ public class StatisticsHandling {
     public static class StatsSender implements AutoCloseable {
         private final ManagedChannel managedChannel;
         private final StreamObserver<Services.Stats> stats;
+        // this is very bad and won't actually work!
 
-        public StatsSender(InetSocketAddress address, String target) {
+        public StatsSender(InetSocketAddress address, String target, List<String> sourceAddresses) {
             managedChannel = ManagedChannelBuilder.forAddress(address.getHostName(), address.getPort())
                     .usePlaintext().intercept(new ClientInterceptor() {
                         @Override
@@ -214,6 +202,8 @@ public class StatisticsHandling {
                                 @Override
                                 public void start(Listener<RespT> responseListener, Metadata headers) {
                                     headers.put(TARGET_KEY, target);
+                                    headers.put(WORKER_KEY, String.join(" ", sourceAddresses));
+                                    System.out.println("on client: " + String.join(" ", sourceAddresses));
                                     super.start(responseListener, headers);
                                 }
                             };
@@ -222,7 +212,6 @@ public class StatisticsHandling {
             stats = StatsServiceGrpc.newStub(managedChannel).push(new StreamObserver<>() {
                 @Override
                 public void onNext(Empty value) {
-                    System.out.println("debug");
                 }
 
                 @Override

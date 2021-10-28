@@ -4,6 +4,7 @@ import com.flamestream.optimizer.sql.agents.Coordinator;
 import com.flamestream.optimizer.sql.agents.CostEstimator;
 import com.flamestream.optimizer.sql.agents.Executor;
 import com.flamestream.optimizer.sql.agents.Services;
+import com.flamestream.optimizer.sql.agents.source.SourceWrapper;
 import com.flamestream.optimizer.sql.agents.testutils.TestPipelineOptions;
 import com.flamestream.optimizer.sql.agents.util.SqlTransform;
 import com.google.common.collect.ImmutableList;
@@ -12,7 +13,10 @@ import org.apache.beam.sdk.Pipeline;
 import org.apache.beam.sdk.coders.KvCoder;
 import org.apache.beam.sdk.coders.VarLongCoder;
 import org.apache.beam.sdk.coders.VoidCoder;
-import org.apache.beam.sdk.extensions.sql.impl.*;
+import org.apache.beam.sdk.extensions.sql.impl.BeamSqlEnv;
+import org.apache.beam.sdk.extensions.sql.impl.CalciteQueryPlanner;
+import org.apache.beam.sdk.extensions.sql.impl.ModifiedCalciteQueryPlanner;
+import org.apache.beam.sdk.extensions.sql.impl.QueryPlanner;
 import org.apache.beam.sdk.extensions.sql.impl.rel.BeamIOSourceRel;
 import org.apache.beam.sdk.extensions.sql.impl.rel.BeamRelNode;
 import org.apache.beam.sdk.extensions.sql.impl.rel.BeamSqlRelUtils;
@@ -76,26 +80,31 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
         this.estimator = estimator;
         this.executor = executor;
         try {
-            statisticsServer = new StatisticsHandling.NIOServer(1337, target -> new StreamObserver<>() {
-                @Override
-                public void onNext(Services.Stats value) {
-                    final var relNode = runningJobs.get(0).beamRelNode;
-                    System.out.println(estimator.getCumulativeCost(
-                            relNode,
-                            value.getCardinalityMap().entrySet().stream().collect(Collectors.toMap(
-                                    entry -> "table_column_distinct_row_count:" + entry.getKey().toLowerCase(),
-                                    Map.Entry::getValue
-                            ))
-                    ));
-                }
+            statisticsServer = new StatisticsHandling.NIOServer(1337, (target, worker) -> {
+                System.out.println("worker " + worker);
+                Arrays.stream(worker.split(" ")).forEach(executor::submitSource);
+                return new StreamObserver<>() {
+                    @Override
+                    public void onNext(Services.Stats value) {
+                        final var relNode = runningJobs.get(0).beamRelNode;
+                        System.out.println(estimator.getCumulativeCost(
+                                relNode,
+                                value.getCardinalityMap().entrySet().stream().collect(Collectors.toMap(
+                                        entry -> "table_column_distinct_row_count:" + entry.getKey().toLowerCase(),
+                                        Map.Entry::getValue
+                                ))
+                        ));
+                        tryNewGraph(runningJobs.get(0).sqlQueryJob);
+                    }
 
-                @Override
-                public void onError(Throwable t) {
-                }
+                    @Override
+                    public void onError(Throwable t) {
+                    }
 
-                @Override
-                public void onCompleted() {
-                }
+                    @Override
+                    public void onCompleted() {
+                    }
+                };
             });
         } catch (IOException e) {
             throw new RuntimeException(e);
@@ -121,7 +130,11 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
         final var beamRelNode = createPipeline(pipeline, sqlQueryJob, QueryPlanner.QueryParameters.ofNone());
         final var runningSqlQueryJob = new Running(sqlQueryJob, beamRelNode);
         runningJobs.add(runningSqlQueryJob);
-        executor.startOrUpdate(pipeline, null);
+        try {
+            executor.startOrUpdate(pipeline, null);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
         return runningSqlQueryJob;
     }
 
@@ -137,12 +150,18 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
 
     private void tryNewGraph(SqlQueryJob sqlQueryJob) {
         // here we need to give list of providers to newSqlTransform method
-        SqlTransform newSqlTransform =
+        /*SqlTransform newSqlTransform =
                 updateSqlTransform(sqlQueryJob.query(), ImmutableList.of());
+        // awesome code 10/10
         if (newSqlTransform != null) {
-            final var pipeline = Pipeline.create();
-            createPipeline(pipeline, sqlQueryJob, QueryPlanner.QueryParameters.ofNone());
+
+        }*/
+        final var pipeline = Pipeline.create();
+        createPipeline(pipeline, sqlQueryJob, QueryPlanner.QueryParameters.ofNone());
+        try {
             executor.startOrUpdate(pipeline, null);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
         }
     }
 
@@ -151,8 +170,7 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
         return oldGraphCost.isLt(newGraphCost);
     }
 
-    private SqlTransform
-    updateSqlTransform(String query, ImmutableList<RelMetadataProvider> providers) {
+    private SqlTransform updateSqlTransform(String query, ImmutableList<RelMetadataProvider> providers) {
         // here our planner implementation should give new graph
         /*BeamRelNode newGraph = queryPlanner.convertToBeamRel(query, QueryPlanner.QueryParameters.ofNone());
         RelOptCost newGraphCost = estimator.getCumulativeCost(newGraph, providers, RelMetadataQuery.instance());
@@ -180,10 +198,13 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
             Pipeline pipeline, SqlQueryJob sqlQueryJob, QueryPlanner.QueryParameters queryParameters
     ) {
         HashMap<String, PCollection<Row>> tagged = new HashMap<>();
+        List<String> sourceAddresses = new ArrayList<>();
 
         for (var source : sourcesList) {
-            source.applyTransforms(pipeline, sqlQueryJob, tagged);
+            source.applyTransforms(pipeline, sqlQueryJob, tagged, sourceAddresses);
         }
+
+        System.out.println("source addresses: " + String.join(" ", sourceAddresses));
 
         PCollectionTuple withTags = PCollectionTuple.empty(pipeline);
 
@@ -220,7 +241,8 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
         if (!stats.isEmpty()) {
             PCollectionList.of(stats).apply(Flatten.pCollections()).apply(ParDo.of(new StatisticsHandling.StatsDoFn(
                     new InetSocketAddress(1337),
-                    PCollectionList.of(stats).size()
+                    PCollectionList.of(stats).size(),
+                    sourceAddresses
             )));
         }
 
@@ -239,8 +261,15 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
         final Schema schema;
         final Map<String, PTransform<PCollection<T>, PCollection<Row>>> tableMapping;
 
-        public void applyTransforms(Pipeline pipeline, SqlQueryJob sqlQueryJob, HashMap<String, PCollection<Row>> tagged) {
-            PCollection<T> readFromSource = pipeline.apply(Read.from(source))
+        public void applyTransforms(Pipeline pipeline,
+                                    SqlQueryJob sqlQueryJob,
+                                    HashMap<String, PCollection<Row>> tagged,
+                                    List<String> sourceAddresses) {
+            System.out.println("apply transforms");
+            SourceWrapper<T, ? extends UnboundedSource.CheckpointMark> sourceWrapper = new SourceWrapper<>(source);
+            // TODO what is the actual host address?
+            sourceAddresses.add("localhost:" + sourceWrapper.getPortNumber());
+            PCollection<T> readFromSource = pipeline.apply(Read.from(sourceWrapper))
                     .apply(Window.into(sqlQueryJob.windowFunction()));
 
             for (var entry : tableMapping.entrySet()) {
