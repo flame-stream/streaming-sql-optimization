@@ -187,7 +187,6 @@ public class StatisticsHandling {
     public static class StatsSender implements AutoCloseable {
         private final ManagedChannel managedChannel;
         private final StreamObserver<Services.Stats> stats;
-        // this is very bad and won't actually work!
 
         public StatsSender(InetSocketAddress address, String target, List<String> sourceAddresses) {
             managedChannel = ManagedChannelBuilder.forAddress(address.getHostName(), address.getPort())

@@ -18,7 +18,6 @@ import java.io.IOException;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.stream.Collectors;
 
 // TODO fix nullability annotations, remove all other annotations
 public class SourceWrapper<T, U extends UnboundedSource.CheckpointMark> extends UnboundedSource<T, U> {
@@ -30,7 +29,8 @@ public class SourceWrapper<T, U extends UnboundedSource.CheckpointMark> extends 
 
     public SourceWrapper(final UnboundedSource<T, U> source) {
         this.source = source;
-        this.portNumber = ThreadLocalRandom.current().nextInt(9000, 65000);;
+        this.portNumber = ThreadLocalRandom.current().nextInt(9000, 65000);
+        System.out.println("chose port number " + this.portNumber);
     }
 
     public int getPortNumber() {
@@ -40,11 +40,8 @@ public class SourceWrapper<T, U extends UnboundedSource.CheckpointMark> extends 
     @Override
     public List<SourceWrapper<T, U>> split(int desiredNumSplits, PipelineOptions options) throws Exception {
         System.out.println("split");
-        return source.split(1, options).stream().map(SourceWrapper::new).collect(Collectors.toList());
-//        return List.of(this);
-        /*return source.split(desiredNumSplits, options).stream()
-                .map(SourceWrapper::new)
-                .collect(Collectors.toList());*/
+//        return List.of(new SourceWrapper<>(source));
+        return List.of(this);
     }
 
     @Override
@@ -84,11 +81,6 @@ public class SourceWrapper<T, U extends UnboundedSource.CheckpointMark> extends 
             if (this.server.result != null && this.server.result.equals("Pause")) {
                 return false;
             }
-            // don't actually start until we reached the correct timestamp?
-            // TODO what was the point of this check...
-            /*if (this.server.result != null && this.server.result.equals("Resume") && getCurrentTimestamp().getMillis() < server.timestamp) {
-                return true;
-            }*/
             return reader.advance();
         }
 
@@ -162,7 +154,6 @@ public class SourceWrapper<T, U extends UnboundedSource.CheckpointMark> extends 
                 public void resumeTo(Services.Timestamp request, StreamObserver<Services.Empty> responseObserver) {
                     result = "Resume";
                     timestamp = request.getValue();
-                    // TODO or is it
                     responseObserver.onCompleted();
                     log("Resume");
                 }

@@ -18,11 +18,16 @@ import java.io.Serializable;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 public class ExecutorImpl implements Executor, Serializable {
+    // this vile thing is used to call tryNewGraph only once and will remain here
+    // until we implement some logic which will allow us to decide when to create a new graph
+    public static int HACKY_VARIABLE = 0;
+
     private Pipeline currentPipeline = null;
     private SourceCommunicator sourceCommunicator = null;
     // some kind of watermark
@@ -30,21 +35,29 @@ public class ExecutorImpl implements Executor, Serializable {
     private final PipelineOptions options;
     private CountDownLatch latch = null;
 
-    private final List<SourceCommunicator> sources;
+    private List<SourceCommunicator> currentSources;
+    private List<SourceCommunicator> newSources;
 
     // TODO i have zero idea
     private final String tag = "user-agent";
 
     public ExecutorImpl(final PipelineOptions options) {
         this.options = options;
-        this.sources = new ArrayList<>();
+        this.currentSources = new ArrayList<>();
+        this.newSources = new ArrayList<>();
     }
 
     @Override
     public void submitSource(String sourceHostAndPort) {
         final String host = sourceHostAndPort.substring(0, sourceHostAndPort.lastIndexOf(':'));
         final int port = Integer.parseInt(sourceHostAndPort.substring(sourceHostAndPort.lastIndexOf(':') + 1));
-        sources.add(new SourceCommunicator(new InetSocketAddress(host, port), tag));
+        final SourceCommunicator source = new SourceCommunicator(new InetSocketAddress(host, port), tag);
+        if (currentPipeline != null && !newSources.contains(source)) {
+            newSources.add(source);
+        }
+        else if (!currentSources.contains(source)) {
+            currentSources.add(source);
+        }
         if (latch != null) {
             latch.countDown();
         }
@@ -52,22 +65,32 @@ public class ExecutorImpl implements Executor, Serializable {
 
     @Override
     public void startOrUpdate(Pipeline pipeline, Consumer<ChangingStatus> statusConsumer) throws InterruptedException {
-        final PipelineRunner<@NonNull PipelineResult> runner = FlinkRunner.fromOptions(options);
-        runner.run(pipeline);
+        System.out.println("start or update");
 
+        HACKY_VARIABLE++;
+        final PipelineRunner<@NonNull PipelineResult> runner = FlinkRunner.fromOptions(options);
+
+        System.out.println("current pipeline is ok " + (currentPipeline != null));
         if (currentPipeline != null) {
-            for (SourceCommunicator source : sources) {
+            for (SourceCommunicator source : currentSources) {
+                System.out.println("calling pause on source " + source.address);
                 source.pause();
             }
-            latch = new CountDownLatch(sources.size());
+            latch = new CountDownLatch(currentSources.size());
+            runner.run(pipeline);
             latch.await();
+            currentPipeline = pipeline;
             /*for (SourceCommunicator source : sources) {
                 source.resumeAtTimestamp();
             }*/
         }
+        else {
+            currentPipeline = pipeline;
+            runner.run(pipeline);
+        }
 
 
-        currentPipeline = pipeline;
+
         // TODO random choice of available port?
         /*sourceCommunicator = new SourceCommunicator(new InetSocketAddress("localhost", 9000), tag);
         sourceCommunicator.resumeAtTimestamp(timestamp);*/
@@ -80,11 +103,13 @@ public class ExecutorImpl implements Executor, Serializable {
     }
 
     public static class SourceCommunicator implements AutoCloseable {
+        private final InetSocketAddress address;
         private final ManagedChannel managedChannel;
         private final WorkerServiceGrpc.WorkerServiceStub stub;
         private long timestamp;
 
         public SourceCommunicator(InetSocketAddress address, String userAgent) {
+            this.address = address;
             managedChannel = ManagedChannelBuilder.forAddress(address.getHostName(), address.getPort())
                     .usePlaintext().intercept(new ClientInterceptor() {
                         @Override
@@ -141,6 +166,19 @@ public class ExecutorImpl implements Executor, Serializable {
 
                 }
             });
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            SourceCommunicator that = (SourceCommunicator) o;
+            return address.equals(that.address);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(address);
         }
 
         @Override

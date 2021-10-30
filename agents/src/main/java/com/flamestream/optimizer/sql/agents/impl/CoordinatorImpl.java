@@ -94,7 +94,10 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
                                         Map.Entry::getValue
                                 ))
                         ));
-                        tryNewGraph(runningJobs.get(0).sqlQueryJob);
+                        System.out.println("hacky " + ExecutorImpl.HACKY_VARIABLE);
+                        if (ExecutorImpl.HACKY_VARIABLE <= 1) {
+                            tryNewGraph(runningJobs.get(0).sqlQueryJob);
+                        }
                     }
 
                     @Override
@@ -159,6 +162,7 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
         final var pipeline = Pipeline.create();
         createPipeline(pipeline, sqlQueryJob, QueryPlanner.QueryParameters.ofNone());
         try {
+            System.out.println("trying a new graph");
             executor.startOrUpdate(pipeline, null);
         } catch (InterruptedException e) {
             e.printStackTrace();
