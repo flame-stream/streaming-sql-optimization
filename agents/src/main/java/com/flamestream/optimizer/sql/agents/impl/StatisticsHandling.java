@@ -2,7 +2,6 @@ package com.flamestream.optimizer.sql.agents.impl;
 
 import com.flamestream.optimizer.sql.agents.Services;
 import com.flamestream.optimizer.sql.agents.StatsServiceGrpc;
-import com.flamestream.optimizer.sql.agents.source.SourceWrapper;
 import com.google.protobuf.Empty;
 import io.grpc.*;
 import io.grpc.stub.StreamObserver;
@@ -13,6 +12,8 @@ import org.apache.beam.sdk.transforms.DoFn;
 import org.apache.beam.sdk.transforms.windowing.BoundedWindow;
 import org.apache.beam.sdk.values.KV;
 import org.joda.time.Instant;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.DatagramSocket;
@@ -25,13 +26,13 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
-import java.util.function.Function;
 
 public class StatisticsHandling {
     private static final Metadata.Key<String> TARGET_KEY = Metadata.Key.of("target", Metadata.ASCII_STRING_MARSHALLER);
     private static final Metadata.Key<String> WORKER_KEY = Metadata.Key.of("worker", Metadata.ASCII_STRING_MARSHALLER);
     public static final int STATS_PORT = 9004;
-    public static int workerPortNumber = 10000;
+
+    private static final Logger LOG = LoggerFactory.getLogger("optimizer.statistics");
 
     public static class LocalCardinalityDoFn extends DoFn<KV<Long, Long>, KV<String, Double>> {
         private final String column;
@@ -79,8 +80,8 @@ public class StatisticsHandling {
 
         @Setup
         public void setup() throws IOException {
+            LOG.info("setting up stats do fn at " + getLocalAddress().getHostAddress() + STATS_PORT);
             userAgent = getLocalAddress().getHostAddress() + ":" + STATS_PORT;
-            System.out.println("user agent" + userAgent);
             statsSender = new StatsSender(executorAddress, userAgent, sourceAddresses);
         }
 
@@ -165,6 +166,7 @@ public class StatisticsHandling {
                     };
                 }
             }).build();
+            LOG.info("started statistics server");
             server.start();
         }
 
@@ -172,6 +174,7 @@ public class StatisticsHandling {
 
         @Override
         public void close() throws Exception {
+            LOG.info("closing statistics server");
             server.shutdown();
             while (true) {
                 try {
@@ -189,6 +192,7 @@ public class StatisticsHandling {
         private final StreamObserver<Services.Stats> stats;
 
         public StatsSender(InetSocketAddress address, String target, List<String> sourceAddresses) {
+            LOG.info("called stats sender constructor");
             managedChannel = ManagedChannelBuilder.forAddress(address.getHostName(), address.getPort())
                     .usePlaintext().intercept(new ClientInterceptor() {
                         @Override
@@ -202,7 +206,7 @@ public class StatisticsHandling {
                                 public void start(Listener<RespT> responseListener, Metadata headers) {
                                     headers.put(TARGET_KEY, target);
                                     headers.put(WORKER_KEY, String.join(" ", sourceAddresses));
-                                    System.out.println("on client: " + String.join(" ", sourceAddresses));
+                                    LOG.info("source addresses as known to client: " + String.join(" ", sourceAddresses));
                                     super.start(responseListener, headers);
                                 }
                             };

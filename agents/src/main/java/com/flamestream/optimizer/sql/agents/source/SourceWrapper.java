@@ -2,10 +2,7 @@ package com.flamestream.optimizer.sql.agents.source;
 
 import com.flamestream.optimizer.sql.agents.Services;
 import com.flamestream.optimizer.sql.agents.WorkerServiceGrpc;
-import io.grpc.Context;
-import io.grpc.Metadata;
-import io.grpc.Server;
-import io.grpc.ServerBuilder;
+import io.grpc.*;
 import io.grpc.stub.StreamObserver;
 import org.apache.beam.sdk.coders.Coder;
 import org.apache.beam.sdk.io.UnboundedSource;
@@ -13,6 +10,8 @@ import org.apache.beam.sdk.options.PipelineOptions;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.joda.time.Instant;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.List;
@@ -23,6 +22,8 @@ import java.util.concurrent.ThreadLocalRandom;
 public class SourceWrapper<T, U extends UnboundedSource.CheckpointMark> extends UnboundedSource<T, U> {
     public static final Metadata.Key<String> TAG = Metadata.Key.of("tag", Metadata.ASCII_STRING_MARSHALLER);
 
+    public static final Logger LOG = LoggerFactory.getLogger("optimizer.source");
+
     private final int portNumber;
 
     private final UnboundedSource<T, U> source;
@@ -30,7 +31,7 @@ public class SourceWrapper<T, U extends UnboundedSource.CheckpointMark> extends 
     public SourceWrapper(final UnboundedSource<T, U> source) {
         this.source = source;
         this.portNumber = ThreadLocalRandom.current().nextInt(9000, 65000);
-        System.out.println("chose port number " + this.portNumber);
+        LOG.info("chose port number " + this.portNumber);
     }
 
     public int getPortNumber() {
@@ -39,7 +40,7 @@ public class SourceWrapper<T, U extends UnboundedSource.CheckpointMark> extends 
 
     @Override
     public List<SourceWrapper<T, U>> split(int desiredNumSplits, PipelineOptions options) throws Exception {
-        System.out.println("split");
+        LOG.info("split");
 //        return List.of(new SourceWrapper<>(source));
         return List.of(this);
     }
@@ -47,7 +48,7 @@ public class SourceWrapper<T, U extends UnboundedSource.CheckpointMark> extends 
     @Override
     public @NonNull UnboundedReader<T> createReader(@NonNull PipelineOptions options,
                                                     @Nullable U checkpointMark) throws IOException {
-        System.out.println("create reader");
+        LOG.info("created reader");
         return new ReaderWrapper(source.createReader(options, checkpointMark));
     }
 
@@ -65,10 +66,10 @@ public class SourceWrapper<T, U extends UnboundedSource.CheckpointMark> extends 
         private final UnboundedReader<T> reader;
         private final NIOServer server;
 
-        private ReaderWrapper(final UnboundedReader<T> reader) {
+        private ReaderWrapper(final UnboundedReader<T> reader) throws IOException {
             this.reader = reader;
-            this.server = new NIOServer();
-            this.server.start();
+            LOG.info("started worker server on source on port " + portNumber);
+            server = new NIOServer(portNumber);
         }
 
         @Override
@@ -78,19 +79,42 @@ public class SourceWrapper<T, U extends UnboundedSource.CheckpointMark> extends 
 
         @Override
         public boolean advance() throws IOException {
-            if (this.server.result != null && this.server.result.equals("Pause")) {
-                return false;
+            final boolean res = reader.advance();
+            if (server.result != null) {
+                final Instant current = getCurrentTimestamp();
+                if (server.result.equals("Pause")) {
+                    // TODO pause actually needs to return the max watermark that the executor agreed upon
+                    /*if (current.getMillis() > server.watermark.getMillis()) {
+                        return false;
+                    }*/
+                    return false;
+                }
+                if (server.result.equals("Resume")) {
+                    if (current.getMillis() < server.watermark.getMillis()) {
+                        return false;
+                    }
+                }
             }
-            return reader.advance();
+            return res;
         }
 
         @Override
         public T getCurrent() throws NoSuchElementException {
-            // TODO current timestamp check?
-            if (this.server.result != null && this.server.result.equals("Pause")) {
-                return null;
+            final T res = reader.getCurrent();
+            if (server.result != null) {
+                final Instant current = getCurrentTimestamp();
+                if (server.result.equals("Pause")) {
+                    if (current.getMillis() > server.watermark.getMillis()) {
+                        return null;
+                    }
+                }
+                if (server.result.equals("Resume")) {
+                    if (current.getMillis() < server.watermark.getMillis()) {
+                        return null;
+                    }
+                }
             }
-            return reader.getCurrent();
+            return res;
         }
 
         @Override
@@ -105,9 +129,7 @@ public class SourceWrapper<T, U extends UnboundedSource.CheckpointMark> extends 
 
         @Override
         public @NonNull Instant getWatermark() {
-            final Instant watermark = reader.getWatermark();
-            server.timestamp = watermark.getMillis();
-            return watermark;
+            return reader.getWatermark();
         }
 
         @Override
@@ -119,61 +141,58 @@ public class SourceWrapper<T, U extends UnboundedSource.CheckpointMark> extends 
         public @NonNull UnboundedSource<T, ?> getCurrentSource() {
             return reader.getCurrentSource();
         }
-    }
 
-    public class NIOServer implements AutoCloseable {
-        public String result;
-        public long timestamp = -1;
-        private Server server;
+        private class NIOServer implements AutoCloseable {
+            private final Server server;
+            private Instant watermark;
 
-        public void start() {
-            System.out.println("Started server on port " + portNumber);
-            final var tag = Context.key("user-agent");
-            server = ServerBuilder.forPort(portNumber)
-              /*      .intercept(new ServerInterceptor() {
-                @Override
-                public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
-                        ServerCall<ReqT, RespT> call, Metadata headers, ServerCallHandler<ReqT, RespT> next
-                ) {
-                    return Contexts.interceptCall(
-                            Context.current().withValue(tag, headers.get(TAG)).withValue(Context.key("worker"), port),
-                            call, headers, next
-                    );
-                }
-            })*/
-                    .addService(new WorkerServiceGrpc.WorkerServiceImplBase() {
-                @Override
-                public void pause(Services.Empty request, StreamObserver<Services.Timestamp> responseObserver) {
-                    result = "Pause";
-                    responseObserver.onNext(Services.Timestamp.newBuilder().setValue(timestamp).build());
-                    responseObserver.onCompleted();
-                    log("Pause");
-                }
+            public NIOServer(int port) throws IOException {
+                final var targetKey = Context.key("target");
+                final var workerKey = Context.key("worker");
+                this.server = ServerBuilder.forPort(port).intercept(new ServerInterceptor() {
+                    @Override
+                    public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
+                            ServerCall<ReqT, RespT> call, Metadata headers, ServerCallHandler<ReqT, RespT> next
+                    ) {
+                        LOG.info("call intercept actually works");
+                        return Contexts.interceptCall(
+                                Context.current(),
+                                call, headers, next
+                        );
+                    }
+                }).addService(new WorkerServiceGrpc.WorkerServiceImplBase() {
+                    @Override
+                    public void pause(Services.Empty request, StreamObserver<Services.Timestamp> responseObserver) {
+                        LOG.info("pause called on server on source");
+                        result = "Pause"; // Looks Bad
+                        responseObserver.onNext(Services.Timestamp.newBuilder().setValue(getWatermark().getMillis()).build());
+                    }
 
-                @Override
-                public void resumeTo(Services.Timestamp request, StreamObserver<Services.Empty> responseObserver) {
-                    result = "Resume";
-                    timestamp = request.getValue();
-                    responseObserver.onCompleted();
-                    log("Resume");
-                }
-            }).build();
-            System.out.println("on server: " + portNumber);
-        }
+                    @Override
+                    public void resumeTo(Services.Timestamp request, StreamObserver<Services.Empty> responseObserver) {
+                        LOG.info("resume called on server on source");
+                        result = "Resume";
+                        watermark = Instant.ofEpochMilli(request.getValue());
+                        responseObserver.onNext(Services.Empty.newBuilder().getDefaultInstanceForType());
+                    }
+                }).build();
+                LOG.info("started worker server");
+                server.start();
+            }
 
-        private void log(String str) {
-            System.out.println(str);
-        }
+            public String result;
 
-        @Override
-        public void close() throws Exception {
-            server.shutdown();
-            while (true) {
-                try {
-                    server.awaitTermination();
-                    break;
-                } catch (InterruptedException e) {
-                    server.shutdownNow();
+            @Override
+            public void close() throws Exception {
+                LOG.info("closing worker server");
+                server.shutdown();
+                while (true) {
+                    try {
+                        server.awaitTermination();
+                        break;
+                    } catch (InterruptedException e) {
+                        server.shutdownNow();
+                    }
                 }
             }
         }

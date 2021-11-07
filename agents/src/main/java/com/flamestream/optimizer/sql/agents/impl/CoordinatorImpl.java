@@ -31,6 +31,8 @@ import org.apache.beam.sdk.values.*;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.plan.RelOptCost;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rel.metadata.RelMetadataProvider;
 import org.checkerframework.checker.nullness.compatqual.NonNullType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -43,6 +45,8 @@ import java.util.stream.Stream;
         "nullness"
 })
 public class CoordinatorImpl implements Coordinator, AutoCloseable {
+    private final static Logger LOG = LoggerFactory.getLogger("optimizer.coordinator");
+
     private final List<SourceWithSchema<?>> sourcesList = new ArrayList<>();
     private final CostEstimator estimator;
     private final Executor executor;
@@ -80,21 +84,23 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
         this.estimator = estimator;
         this.executor = executor;
         try {
+            LOG.info("starting a statistics server on port 1337");
             statisticsServer = new StatisticsHandling.NIOServer(1337, (target, worker) -> {
-                System.out.println("worker " + worker);
+                LOG.info("worker servers addresses " + worker);
                 Arrays.stream(worker.split(" ")).forEach(executor::submitSource);
                 return new StreamObserver<>() {
                     @Override
                     public void onNext(Services.Stats value) {
                         final var relNode = runningJobs.get(0).beamRelNode;
-                        System.out.println(estimator.getCumulativeCost(
+                        final RelOptCost cost = estimator.getCumulativeCost(
                                 relNode,
                                 value.getCardinalityMap().entrySet().stream().collect(Collectors.toMap(
                                         entry -> "table_column_distinct_row_count:" + entry.getKey().toLowerCase(),
                                         Map.Entry::getValue
                                 ))
-                        ));
-                        System.out.println("hacky " + ExecutorImpl.HACKY_VARIABLE);
+                        );
+                        LOG.info("cost " + cost.toString());
+                        LOG.info("hacky " + ExecutorImpl.HACKY_VARIABLE);
                         if (ExecutorImpl.HACKY_VARIABLE <= 1) {
                             tryNewGraph(runningJobs.get(0).sqlQueryJob);
                         }
@@ -102,10 +108,13 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
 
                     @Override
                     public void onError(Throwable t) {
+                        LOG.error("statistics server error");
+                        t.printStackTrace();
                     }
 
                     @Override
                     public void onCompleted() {
+                        LOG.info("statistics server: completed");
                     }
                 };
             });
@@ -119,6 +128,7 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
             Schema sourceSchema,
             Map<String, PTransform<PCollection<T>, PCollection<Row>>> tableMapping
     ) {
+        LOG.info("registering user source with schema " + sourceSchema.toString());
         sourcesList.add(new SourceWithSchema<>(source, sourceSchema, tableMapping));
     }
 
@@ -134,6 +144,7 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
         final var runningSqlQueryJob = new Running(sqlQueryJob, beamRelNode);
         runningJobs.add(runningSqlQueryJob);
         try {
+            LOG.info("starting job on executor");
             executor.startOrUpdate(pipeline, null);
         } catch (InterruptedException e) {
             e.printStackTrace();
@@ -162,7 +173,7 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
         final var pipeline = Pipeline.create();
         createPipeline(pipeline, sqlQueryJob, QueryPlanner.QueryParameters.ofNone());
         try {
-            System.out.println("trying a new graph");
+            LOG.info("trying a new graph");
             executor.startOrUpdate(pipeline, null);
         } catch (InterruptedException e) {
             e.printStackTrace();
@@ -208,7 +219,7 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
             source.applyTransforms(pipeline, sqlQueryJob, tagged, sourceAddresses);
         }
 
-        System.out.println("source addresses: " + String.join(" ", sourceAddresses));
+        LOG.info("source addresses: " + String.join(" ", sourceAddresses));
 
         PCollectionTuple withTags = PCollectionTuple.empty(pipeline);
 
@@ -242,6 +253,9 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
                 )
                         : Stream.empty()
         ).collect(Collectors.toList());
+
+        LOG.info("stats size " + stats.size());
+
         if (!stats.isEmpty()) {
             PCollectionList.of(stats).apply(Flatten.pCollections()).apply(ParDo.of(new StatisticsHandling.StatsDoFn(
                     new InetSocketAddress(1337),
@@ -269,7 +283,6 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
                                     SqlQueryJob sqlQueryJob,
                                     HashMap<String, PCollection<Row>> tagged,
                                     List<String> sourceAddresses) {
-            System.out.println("apply transforms");
             SourceWrapper<T, ? extends UnboundedSource.CheckpointMark> sourceWrapper = new SourceWrapper<>(source);
             // TODO what is the actual host address?
             sourceAddresses.add("localhost:" + sourceWrapper.getPortNumber());

@@ -63,7 +63,8 @@ public class TestSource {
 
     public static UnboundedEventSource getTestSource() {
         final NexmarkConfiguration config = NexmarkConfiguration.DEFAULT;
-        config.numEvents = 100;
+        config.numEvents = 10000;
+        config.isRateLimited = true;
         var generatorConfig = new GeneratorConfig(
                 config,
                 config.useWallclockEventTime ? System.currentTimeMillis() : 0,
