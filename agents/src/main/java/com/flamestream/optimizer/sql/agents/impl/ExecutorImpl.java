@@ -33,14 +33,10 @@ public class ExecutorImpl implements Executor, Serializable {
     public static final Logger LOG = LoggerFactory.getLogger("optimizer.executor");
 
     private Pipeline currentPipeline = null;
-    private SourceCommunicator sourceCommunicator = null;
-    // some kind of watermark
-    private long timestamp = -1;
     private final PipelineOptions options;
     private CountDownLatch latch = null;
 
-    private List<SourceCommunicator> currentSources;
-    private List<Long> watermarks;
+    private final List<SourceCommunicator> currentSources;
 
     // TODO i have zero idea
     private final String tag = "user-agent";
@@ -48,7 +44,6 @@ public class ExecutorImpl implements Executor, Serializable {
     public ExecutorImpl(final PipelineOptions options) {
         this.options = options;
         currentSources = new ArrayList<>();
-        watermarks = new ArrayList<>();
     }
 
     @Override

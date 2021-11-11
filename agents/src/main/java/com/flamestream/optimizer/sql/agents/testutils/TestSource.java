@@ -65,6 +65,8 @@ public class TestSource {
         final NexmarkConfiguration config = NexmarkConfiguration.DEFAULT;
         config.numEvents = 10000;
         config.isRateLimited = true;
+        config.streamTimeout = 5 * 60;
+        config.useWallclockEventTime = true;
         var generatorConfig = new GeneratorConfig(
                 config,
                 config.useWallclockEventTime ? System.currentTimeMillis() : 0,
