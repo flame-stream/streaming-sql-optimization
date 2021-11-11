@@ -264,12 +264,13 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
             )));
         }
 
-        withTags.apply(new PTransform<PCollectionTuple, PCollection<Row>>() {
+        final PCollection<Row> sqlQueryPCollection = withTags.apply(new PTransform<PCollectionTuple, PCollection<Row>>() {
             @Override
             public PCollection<Row> expand(PCollectionTuple input) {
                 return BeamSqlRelUtils.toPCollection(pipeline, beamRelNode);
             }
         });
+        sqlQueryJob.outputs().forEach(sqlQueryPCollection::apply);
         return beamRelNode;
     }
 

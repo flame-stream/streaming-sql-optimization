@@ -82,7 +82,7 @@ public class ExecutorImpl implements Executor, Serializable {
             // TODO maybe not
             currentSources.clear();
 
-            runner.run(pipeline);
+            final PipelineResult res = runner.run(pipeline);
             LOG.info("about to wait on latch");
             latch.await();
             currentPipeline = pipeline;
@@ -91,6 +91,9 @@ public class ExecutorImpl implements Executor, Serializable {
             for (SourceCommunicator source : currentSources) {
                 source.resumeTo(maxWatermark);
             }
+
+            // TODO should we?
+            res.waitUntilFinish();
         }
         else {
             currentPipeline = pipeline;
@@ -133,43 +136,59 @@ public class ExecutorImpl implements Executor, Serializable {
         }
 
         public void pause(final List<Long> watermarks) {
-            stub.pause(Services.Empty.newBuilder().getDefaultInstanceForType(), new StreamObserver<>() {
-                @Override
-                public void onNext(Services.Timestamp value) {
-                    LOG.info("next " + value.getValue());
-                    watermark = Instant.ofEpochMilli(value.getValue());
-                    watermarks.add(watermark.getMillis());
-                }
+            Context newContext = Context.current().fork();
+            Context origContext = newContext.attach();
+            try {
+                // Call async RPC here
+                stub.pause(Services.Empty.newBuilder().getDefaultInstanceForType(), new StreamObserver<>() {
+                    @Override
+                    public void onNext(Services.Timestamp value) {
+                        LOG.info("next " + value.getValue());
+                        watermark = Instant.ofEpochMilli(value.getValue());
+                        watermarks.add(watermark.getMillis());
+                    }
 
-                @Override
-                public void onError(Throwable t) {
-                    LOG.error(t.getMessage());
-                    t.printStackTrace();
-                }
+                    @Override
+                    public void onError(Throwable t) {
+                        LOG.error(t.getMessage());
+                        t.printStackTrace();
+                    }
 
-                @Override
-                public void onCompleted() {
-                }
-            });
+                    @Override
+                    public void onCompleted() {
+                    }
+                });
+            } finally {
+                newContext.detach(origContext);
+            }
         }
 
         public void resumeTo(long watermark) {
-            stub.resumeTo(Services.Timestamp.newBuilder().setValue(watermark).build(), new StreamObserver<Services.Empty>() {
-                @Override
-                public void onNext(Services.Empty value) {
-                    LOG.info("called resume to " + watermark + " on executor client");
-                }
+            Context newContext = Context.current().fork();
+            Context origContext = newContext.attach();
+            try {
+                // Call async RPC here
+                LOG.info("calling async rpc. why does this lead to OOM?");
+                stub.resumeTo(Services.Timestamp.newBuilder().setValue(watermark).build(), new StreamObserver<>() {
+                    @Override
+                    public void onNext(Services.Empty value) {
+                        LOG.info("called resume to " + watermark + " on executor client");
+                    }
 
-                @Override
-                public void onError(Throwable t) {
-                    t.printStackTrace();
-                }
+                    @Override
+                    public void onError(Throwable t) {
+                        LOG.info("there was an error which is now being reported by executor client");
+                        t.printStackTrace();
+                    }
 
-                @Override
-                public void onCompleted() {
+                    @Override
+                    public void onCompleted() {
 
-                }
-            });
+                    }
+                });
+            } finally {
+                newContext.detach(origContext);
+            }
         }
 
         @Override

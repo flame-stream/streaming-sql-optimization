@@ -28,5 +28,8 @@
     <logger name="optimizer.coordinator" level="info">
         <appender-ref ref="FILE" />
     </logger>
+    <logger name="pipeline.test" level="info">
+        <appender-ref ref="FILE" />
+    </logger>
 
 </configuration>
