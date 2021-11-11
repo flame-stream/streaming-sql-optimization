@@ -139,7 +139,6 @@ public class ExecutorImpl implements Executor, Serializable {
             Context newContext = Context.current().fork();
             Context origContext = newContext.attach();
             try {
-                // Call async RPC here
                 stub.pause(Services.Empty.newBuilder().getDefaultInstanceForType(), new StreamObserver<>() {
                     @Override
                     public void onNext(Services.Timestamp value) {
@@ -150,6 +149,7 @@ public class ExecutorImpl implements Executor, Serializable {
 
                     @Override
                     public void onError(Throwable t) {
+                        LOG.info("an error reported by executor in pause");
                         LOG.error(t.getMessage());
                         t.printStackTrace();
                     }
@@ -167,8 +167,6 @@ public class ExecutorImpl implements Executor, Serializable {
             Context newContext = Context.current().fork();
             Context origContext = newContext.attach();
             try {
-                // Call async RPC here
-                LOG.info("calling async rpc. why does this lead to OOM?");
                 stub.resumeTo(Services.Timestamp.newBuilder().setValue(watermark).build(), new StreamObserver<>() {
                     @Override
                     public void onNext(Services.Empty value) {
@@ -177,7 +175,8 @@ public class ExecutorImpl implements Executor, Serializable {
 
                     @Override
                     public void onError(Throwable t) {
-                        LOG.info("there was an error which is now being reported by executor client");
+                        LOG.info("an error reported by executor client in resume to");
+                        LOG.error(t.getMessage());
                         t.printStackTrace();
                     }
 
