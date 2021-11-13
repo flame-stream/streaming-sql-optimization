@@ -43,9 +43,10 @@ public class CoordinatorExecutorStatisticsHandlingTest {
     @Test
     public void testCoordinatorExecutorRunNexmark() {
         final CostEstimator costEstimator = new CostEstimatorImpl();
-        final String[] args = ("--runner=FlinkRunner --query=16 --queryLanguage=sql --streaming=true --manageResources=false --monitorJobs=true --flinkMaster=[local] --tempLocation=" + folder.getRoot().getAbsolutePath()).split(" ");
+        final String argsString = "--runner=FlinkRunner --query=16 --queryLanguage=sql --streaming=true --manageResources=false --monitorJobs=true --flinkMaster=[local] --tempLocation=" + folder.getRoot().getAbsolutePath();
+        final String[] args = (argsString).split(" ");
         final PipelineOptions options = PipelineOptionsFactory.fromArgs(args).withValidation().as(NexmarkOptions.class);
-        final Executor executor = new ExecutorImpl(options);
+        final Executor executor = new ExecutorImpl(argsString);
         final CoordinatorImpl coordinator = new CoordinatorImpl(costEstimator, executor);
 
         final UserSource<Event> source = new UserSource<>(

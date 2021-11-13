@@ -13,9 +13,9 @@ public class CoordinatorExecutorPipeline {
             final CostEstimator costEstimator,
             final @NonNull Collection<UserSource> inputs,
             final Coordinator.SqlQueryJob job,
-            final PipelineOptions executorPipelineOptions) {
+            final String optionsArguments) {
 
-        final Executor executor = new ExecutorImpl(executorPipelineOptions);
+        final Executor executor = new ExecutorImpl(optionsArguments);
         final Coordinator coordinator = new CoordinatorImpl(costEstimator, executor);
 
         for (var input : inputs) {

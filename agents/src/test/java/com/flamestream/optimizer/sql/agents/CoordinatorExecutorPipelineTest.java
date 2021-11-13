@@ -10,7 +10,6 @@ import org.apache.beam.sdk.options.PipelineOptionsFactory;
 import org.apache.beam.sdk.transforms.DoFn;
 import org.apache.beam.sdk.transforms.PTransform;
 import org.apache.beam.sdk.transforms.ParDo;
-import org.apache.beam.sdk.transforms.ToString;
 import org.apache.beam.sdk.transforms.windowing.BoundedWindow;
 import org.apache.beam.sdk.transforms.windowing.FixedWindows;
 import org.apache.beam.sdk.transforms.windowing.WindowFn;
@@ -67,9 +66,10 @@ public class CoordinatorExecutorPipelineTest {
         };
 
         // should probably be configured some other way but this was the easiest
-        final String[] args = ("--runner=FlinkRunner --query=16 --queryLanguage=sql --streaming=true --manageResources=false --monitorJobs=true --flinkMaster=localhost:8081 --tempLocation=" + folder.getRoot().getAbsolutePath()).split(" ");
+        final String argsString = "--runner=FlinkRunner --query=16 --queryLanguage=sql --streaming=true --manageResources=false --monitorJobs=true --flinkMaster=localhost:8081 --tempLocation=" + folder.getRoot().getAbsolutePath();
+        final String[] args = argsString.split(" ");
         final PipelineOptions options = PipelineOptionsFactory.fromArgs(args).withValidation().as(NexmarkOptions.class);
-        CoordinatorExecutorPipeline.fromUserQuery(new CostEstimatorImpl(), List.of(source), job, options);
+        CoordinatorExecutorPipeline.fromUserQuery(new CostEstimatorImpl(), List.of(source), job, argsString);
     }
 
     public static class LoggingFunction extends DoFn<String, String> {
@@ -79,7 +79,8 @@ public class CoordinatorExecutorPipelineTest {
         }
 
         @ProcessElement
-        public void processElement(@Element String element, OutputReceiver<String> out) {
+        public void processElement(@Element String element, OutputReceiver<String> out, PipelineOptions options) {
+            LOG.info(options.getJobName()); // these should be decidedly different
             LOG.info(element);
             out.output(element);
         }
