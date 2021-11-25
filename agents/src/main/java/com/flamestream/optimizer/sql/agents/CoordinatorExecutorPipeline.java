@@ -24,7 +24,7 @@ public class CoordinatorExecutorPipeline {
 
         coordinator.start(job);
         try {
-            Thread.sleep(1000 * 60 * 3);
+            Thread.sleep(1000 * 60 * 5);
         } catch (Exception e) { }
     }
 }

@@ -66,10 +66,16 @@ public class TestSource {
         config.numEvents = 10000;
         config.isRateLimited = true;
         config.streamTimeout = 5 * 60;
-        config.useWallclockEventTime = true;
+//        config.useWallclockEventTime = true;
+        config.useWallclockEventTime = false;
+        config.numEventGenerators = 1;
+        config.probDelayedEvent = 0.0;
+        config.occasionalDelaySec = 0;
+        config.firstEventRate = 25;
+        config.nextEventRate = 25;
         var generatorConfig = new GeneratorConfig(
                 config,
-                config.useWallclockEventTime ? System.currentTimeMillis() : 0,
+                1637695440019L,
                 0,
                 config.numEvents,
                 0);
