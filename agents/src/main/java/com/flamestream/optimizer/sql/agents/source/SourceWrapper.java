@@ -90,7 +90,9 @@ public class SourceWrapper<T, U extends UnboundedSource.CheckpointMark> extends 
                     return false;
                 }
                 if (server.result.equals("Resume")) {
-                    if (current.getMillis() < server.watermark.getMillis()) {
+                    boolean check = current.getMillis() < server.watermark.getMillis();
+                    LOG.info("resume condition (advance): " + current.getMillis() + " < " + server.watermark.getMillis() + " is " + check);
+                    if (check) {
                         return false;
                     }
                 }
@@ -100,6 +102,7 @@ public class SourceWrapper<T, U extends UnboundedSource.CheckpointMark> extends 
 
         @Override
         public T getCurrent() throws NoSuchElementException {
+            LOG.info("get current");
             final T res = reader.getCurrent();
             if (server.result != null) {
                 final Instant current = getCurrentTimestamp();
@@ -109,11 +112,29 @@ public class SourceWrapper<T, U extends UnboundedSource.CheckpointMark> extends 
                     }
                 }
                 if (server.result.equals("Resume")) {
-                    if (current.getMillis() < server.watermark.getMillis()) {
+                    boolean check = current.getMillis() < server.watermark.getMillis();
+                    LOG.info("resume condition (getCurrent): " + current.getMillis() + " < " + server.watermark.getMillis() + " is " + check);
+                    if (check) {
                         return null;
                     }
                 }
             }
+            /*String text = "";
+            if (res instanceof Event) {
+                if (((Event) res).newPerson != null) {
+                    Person p = ((Event) res).newPerson;
+                    text = p.id + " " + p.dateTime;
+                }
+                if (((Event) res).newAuction != null) {
+                    Auction p = ((Event) res).newAuction;
+                    text = p.id + " " + p.dateTime;
+                }
+                if (((Event) res).bid != null) {
+                    Bid p = ((Event) res).bid;
+                    text = p.bidder + " " + p.auction + " " + p.dateTime;
+                }
+            }
+            LOG.info("element " + text);*/
             return res;
         }
 
@@ -129,7 +150,9 @@ public class SourceWrapper<T, U extends UnboundedSource.CheckpointMark> extends 
 
         @Override
         public @NonNull Instant getWatermark() {
-            return reader.getWatermark();
+            Instant watermark = reader.getWatermark();
+//            LOG.info("watermark " + watermark.getMillis() + " on port " + portNumber);
+            return watermark;
         }
 
         @Override
