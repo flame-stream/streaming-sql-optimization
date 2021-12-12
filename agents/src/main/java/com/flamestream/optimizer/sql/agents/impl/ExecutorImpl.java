@@ -1,8 +1,7 @@
 package com.flamestream.optimizer.sql.agents.impl;
 
-import com.flamestream.optimizer.sql.agents.Executor;
-import com.flamestream.optimizer.sql.agents.Services;
-import com.flamestream.optimizer.sql.agents.WorkerServiceGrpc;
+import com.flamestream.optimizer.sql.agents.*;
+import com.google.protobuf.Empty;
 import io.grpc.*;
 import io.grpc.stub.StreamObserver;
 import org.apache.beam.runners.flink.FlinkRunner;
@@ -18,17 +17,17 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
+import java.io.IOException;
 import java.io.Serializable;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
-public class ExecutorImpl implements Executor, Serializable {
+public class ExecutorImpl implements Executor, Serializable, AutoCloseable {
     // this vile thing is used to call tryNewGraph only once and will remain here
     // until we implement some logic which will allow us to decide when to create a new graph
     public static int HACKY_VARIABLE = 0;
@@ -42,12 +41,23 @@ public class ExecutorImpl implements Executor, Serializable {
 
     private final List<SourceCommunicator> currentSources;
 
-    // TODO i have zero idea
-    private final String tag = "user-agent";
+    private final AddressesServer addressesServer;
 
     public ExecutorImpl(final String optionsArguments) {
         this.optionsArguments = optionsArguments;
         currentSources = new ArrayList<>();
+        try {
+            addressesServer = new AddressesServer(30303);
+        } catch (IOException e) {
+            LOG.error("error when initializing address server in executor", e);
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Override
+    public void close() throws Exception {
+        try (addressesServer) {
+        }
     }
 
     @Override
@@ -212,6 +222,40 @@ public class ExecutorImpl implements Executor, Serializable {
                     break;
                 } catch (InterruptedException e) {
                     managedChannel.shutdownNow();
+                }
+            }
+        }
+    }
+
+    public class AddressesServer implements AutoCloseable {
+        private final Server server;
+
+        public AddressesServer(int port) throws IOException {
+            this.server = ServerBuilder.forPort(port).intercept(new ServerInterceptor() {
+                @Override
+                public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
+                        ServerCall<ReqT, RespT> call, Metadata headers, ServerCallHandler<ReqT, RespT> next
+                ) {
+                    return Contexts.interceptCall(Context.current(), call, headers, next);
+                }
+            }).addService(new AddressServiceGrpc.AddressServiceImplBase() {
+                @Override
+                public void sendAddress(Services.Address request, StreamObserver<Empty> responseObserver) {
+                    submitSource(request.getAddress());
+                }
+            }).build();
+            server.start();
+        }
+
+        @Override
+        public void close() throws Exception {
+            server.shutdown();
+            while (true) {
+                try {
+                    server.awaitTermination();
+                    break;
+                } catch (InterruptedException e) {
+                    server.shutdownNow();
                 }
             }
         }

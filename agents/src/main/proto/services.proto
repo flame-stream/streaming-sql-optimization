@@ -14,6 +14,14 @@ message Timestamp {
   int64 value = 1;
 }
 
+message Checkpoint {
+  bytes checkpoint = 1;
+}
+
+message Address {
+  string address = 1;
+}
+
 service StatsService {
   rpc Push(stream Stats) returns (google.protobuf.Empty);
 }
@@ -21,4 +29,12 @@ service StatsService {
 service WorkerService {
   rpc Pause(Empty) returns (Timestamp);
   rpc ResumeTo(Timestamp) returns (Empty);
+}
+
+service CheckpointService {
+  rpc Push(stream Checkpoint) returns (google.protobuf.Empty);
+}
+
+service AddressService {
+  rpc SendAddress(Address) returns (google.protobuf.Empty);
 }

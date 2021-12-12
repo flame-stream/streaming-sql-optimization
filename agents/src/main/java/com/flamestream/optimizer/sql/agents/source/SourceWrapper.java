@@ -1,26 +1,36 @@
 package com.flamestream.optimizer.sql.agents.source;
 
+import com.flamestream.optimizer.sql.agents.AddressServiceGrpc;
+import com.flamestream.optimizer.sql.agents.CheckpointServiceGrpc;
 import com.flamestream.optimizer.sql.agents.Services;
 import com.flamestream.optimizer.sql.agents.WorkerServiceGrpc;
+import com.flamestream.optimizer.sql.agents.util.NetworkUtil;
+import com.google.protobuf.ByteString;
+import com.google.protobuf.Empty;
 import io.grpc.*;
 import io.grpc.stub.StreamObserver;
 import org.apache.beam.sdk.coders.Coder;
 import org.apache.beam.sdk.io.UnboundedSource;
 import org.apache.beam.sdk.options.PipelineOptions;
+import org.apache.commons.io.output.ByteArrayOutputStream;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.joda.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.Serializable;
+import java.net.InetSocketAddress;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
 
 // TODO fix nullability annotations, remove all other annotations
 public class SourceWrapper<T, U extends UnboundedSource.CheckpointMark> extends UnboundedSource<T, U> {
-    public static final Metadata.Key<String> TAG = Metadata.Key.of("tag", Metadata.ASCII_STRING_MARSHALLER);
+    public static final Metadata.Key<String> CHECKPOINT_TAG = Metadata.Key.of("checkpoint_tag", Metadata.ASCII_STRING_MARSHALLER);
 
     public static final Logger LOG = LoggerFactory.getLogger("optimizer.source");
 
@@ -28,9 +38,16 @@ public class SourceWrapper<T, U extends UnboundedSource.CheckpointMark> extends 
 
     private final UnboundedSource<T, U> source;
 
+    private final byte[] checkpointMarkSerialized;
+
     public SourceWrapper(final UnboundedSource<T, U> source) {
+        this(source, null);
+    }
+
+    public SourceWrapper(final UnboundedSource<T, U> source, final byte[] mark) {
         this.source = source;
         this.portNumber = ThreadLocalRandom.current().nextInt(9000, 65000);
+        this.checkpointMarkSerialized = mark;
         LOG.info("chose port number " + this.portNumber);
     }
 
@@ -41,15 +58,20 @@ public class SourceWrapper<T, U extends UnboundedSource.CheckpointMark> extends 
     @Override
     public List<SourceWrapper<T, U>> split(int desiredNumSplits, PipelineOptions options) throws Exception {
         LOG.info("split");
-//        return List.of(new SourceWrapper<>(source));
         return List.of(this);
     }
 
     @Override
     public @NonNull UnboundedReader<T> createReader(@NonNull PipelineOptions options,
                                                     @Nullable U checkpointMark) throws IOException {
-        LOG.info("created reader");
-        return new ReaderWrapper(source.createReader(options, checkpointMark));
+        U checkpointDeserialized = null;
+        if (checkpointMarkSerialized != null) {
+            ByteArrayInputStream bais = new ByteArrayInputStream(checkpointMarkSerialized);
+            checkpointDeserialized = getCheckpointMarkCoder().decode(bais);
+        }
+        final U checkpoint = checkpointMark == null && checkpointDeserialized != null ? checkpointDeserialized : checkpointMark;
+        LOG.info("created reader at checkpoint " + checkpoint);
+        return new ReaderWrapper(source.createReader(options, checkpoint));
     }
 
     @Override
@@ -64,12 +86,17 @@ public class SourceWrapper<T, U extends UnboundedSource.CheckpointMark> extends 
 
     private class ReaderWrapper extends UnboundedReader<T> {
         private final UnboundedReader<T> reader;
-        private final NIOServer server;
+        private final WorkerServer workerServer;
+        private final CheckpointsSender checkpointsSender;
 
         private ReaderWrapper(final UnboundedReader<T> reader) throws IOException {
             this.reader = reader;
             LOG.info("started worker server on source on port " + portNumber);
-            server = new NIOServer(portNumber);
+            workerServer = new WorkerServer(portNumber);
+            checkpointsSender = new CheckpointsSender(new InetSocketAddress(20202), getPortNumber());
+            AddressSender addressSender = new AddressSender(new InetSocketAddress(30303));
+            String host = NetworkUtil.getLocalAddressHost(new InetSocketAddress(30303));
+            addressSender.sendAddress(host + ":" + getPortNumber());
         }
 
         @Override
@@ -80,18 +107,18 @@ public class SourceWrapper<T, U extends UnboundedSource.CheckpointMark> extends 
         @Override
         public boolean advance() throws IOException {
             final boolean res = reader.advance();
-            if (server.result != null) {
+            if (workerServer.result != null) {
                 final Instant current = getCurrentTimestamp();
-                if (server.result.equals("Pause")) {
+                if (workerServer.result.equals("Pause")) {
                     // TODO pause actually needs to return the max watermark that the executor agreed upon
                     /*if (current.getMillis() > server.watermark.getMillis()) {
                         return false;
                     }*/
                     return false;
                 }
-                if (server.result.equals("Resume")) {
-                    boolean check = current.getMillis() < server.watermark.getMillis();
-                    LOG.info("resume condition (advance): " + current.getMillis() + " < " + server.watermark.getMillis() + " is " + check);
+                if (workerServer.result.equals("Resume")) {
+                    boolean check = current.getMillis() < workerServer.watermark.getMillis();
+//                    LOG.info("resume condition (advance): " + current.getMillis() + " < " + server.watermark.getMillis() + " is " + check);
                     if (check) {
                         return false;
                     }
@@ -102,18 +129,17 @@ public class SourceWrapper<T, U extends UnboundedSource.CheckpointMark> extends 
 
         @Override
         public T getCurrent() throws NoSuchElementException {
-            LOG.info("get current");
             final T res = reader.getCurrent();
-            if (server.result != null) {
+            if (workerServer.result != null) {
                 final Instant current = getCurrentTimestamp();
-                if (server.result.equals("Pause")) {
-                    if (current.getMillis() > server.watermark.getMillis()) {
+                if (workerServer.result.equals("Pause")) {
+                    if (current.getMillis() > workerServer.watermark.getMillis()) {
                         return null;
                     }
                 }
-                if (server.result.equals("Resume")) {
-                    boolean check = current.getMillis() < server.watermark.getMillis();
-                    LOG.info("resume condition (getCurrent): " + current.getMillis() + " < " + server.watermark.getMillis() + " is " + check);
+                if (workerServer.result.equals("Resume")) {
+                    boolean check = current.getMillis() < workerServer.watermark.getMillis();
+//                    LOG.info("resume condition (getCurrent): " + current.getMillis() + " < " + server.watermark.getMillis() + " is " + check);
                     if (check) {
                         return null;
                     }
@@ -134,7 +160,7 @@ public class SourceWrapper<T, U extends UnboundedSource.CheckpointMark> extends 
                     text = p.bidder + " " + p.auction + " " + p.dateTime;
                 }
             }
-            LOG.info("element " + text);*/
+            LOG.info("element " + text + " on port " + getPortNumber());*/
             return res;
         }
 
@@ -151,6 +177,8 @@ public class SourceWrapper<T, U extends UnboundedSource.CheckpointMark> extends 
         @Override
         public @NonNull Instant getWatermark() {
             Instant watermark = reader.getWatermark();
+            // this cast should succeed
+            checkpointsSender.send((U)getCheckpointMark());
 //            LOG.info("watermark " + watermark.getMillis() + " on port " + portNumber);
             return watermark;
         }
@@ -165,19 +193,16 @@ public class SourceWrapper<T, U extends UnboundedSource.CheckpointMark> extends 
             return reader.getCurrentSource();
         }
 
-        private class NIOServer implements AutoCloseable {
+        private class WorkerServer implements AutoCloseable {
             private final Server server;
             private Instant watermark;
 
-            public NIOServer(int port) throws IOException {
-                final var targetKey = Context.key("target");
-                final var workerKey = Context.key("worker");
+            public WorkerServer(int port) throws IOException {
                 this.server = ServerBuilder.forPort(port).intercept(new ServerInterceptor() {
                     @Override
                     public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
                             ServerCall<ReqT, RespT> call, Metadata headers, ServerCallHandler<ReqT, RespT> next
                     ) {
-                        LOG.info("call intercept actually works");
                         return Contexts.interceptCall(
                                 Context.current(),
                                 call, headers, next
@@ -215,6 +240,122 @@ public class SourceWrapper<T, U extends UnboundedSource.CheckpointMark> extends 
                         break;
                     } catch (InterruptedException e) {
                         server.shutdownNow();
+                    }
+                }
+            }
+        }
+
+        private class CheckpointsSender implements AutoCloseable, Serializable {
+            private final ManagedChannel managedChannel;
+            private final StreamObserver<Services.Checkpoint> checkpoints;
+
+            public CheckpointsSender(final InetSocketAddress address, int portNumber) {
+                LOG.info("called checkpoints sender constructor");
+                managedChannel = ManagedChannelBuilder.forAddress(address.getHostName(), address.getPort())
+                        .usePlaintext().intercept(new ClientInterceptor() {
+                            @Override
+                            public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
+                                    MethodDescriptor<ReqT, RespT> method, CallOptions callOptions, Channel next
+                            ) {
+                                return new ForwardingClientCall.SimpleForwardingClientCall<>(
+                                        next.newCall(method, callOptions)
+                                ) {
+                                    @Override
+                                    public void start(Listener<RespT> responseListener, Metadata headers) {
+                                        String host = NetworkUtil.getLocalAddressHost(address);
+                                        headers.put(CHECKPOINT_TAG, host + ":" + portNumber);
+                                        super.start(responseListener, headers);
+                                    }
+                                };
+                            }
+                        }).build();
+                checkpoints = CheckpointServiceGrpc.newStub(managedChannel).push(new StreamObserver<>() {
+                    @Override
+                    public void onNext(Empty value) {
+                    }
+
+                    @Override
+                    public void onError(Throwable t) {
+                        t.printStackTrace();
+                    }
+
+                    @Override
+                    public void onCompleted() {
+                    }
+                });
+            }
+
+            public void send(U checkpoint) {
+                final ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                try {
+                    getCheckpointMarkCoder().encode(checkpoint, baos);
+                } catch (IOException e) {
+                    LOG.info("error while encoding the checkpoint", e);
+                }
+                checkpoints.onNext(Services.Checkpoint.newBuilder().setCheckpoint(ByteString.copyFrom(baos.toByteArray())).build());
+            }
+
+            @Override
+            public void close() {
+                checkpoints.onCompleted();
+                managedChannel.shutdown();
+                while (true) {
+                    try {
+                        managedChannel.awaitTermination(Long.MAX_VALUE, TimeUnit.DAYS);
+                        break;
+                    } catch (InterruptedException e) {
+                        managedChannel.shutdownNow();
+                    }
+                }
+            }
+        }
+
+        private class AddressSender implements AutoCloseable, Serializable {
+            private final ManagedChannel managedChannel;
+
+            public AddressSender(InetSocketAddress address) {
+                LOG.info("called address sender constructor");
+                managedChannel = ManagedChannelBuilder.forAddress(address.getHostName(), address.getPort())
+                        .usePlaintext().intercept(new ClientInterceptor() {
+                            @Override
+                            public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
+                                    MethodDescriptor<ReqT, RespT> method, CallOptions callOptions, Channel next
+                            ) {
+                                return new ForwardingClientCall.SimpleForwardingClientCall<>(
+                                        next.newCall(method, callOptions)
+                                ) {};
+                            }
+                        }).build();
+            }
+
+            public void sendAddress(String address) {
+                AddressServiceGrpc.newStub(managedChannel).sendAddress(
+                        Services.Address.newBuilder().setAddress(address).build(),
+                        new StreamObserver<>() {
+                            @Override
+                            public void onNext(Empty value) {
+                            }
+
+                            @Override
+                            public void onError(Throwable t) {
+                            }
+
+                            @Override
+                            public void onCompleted() {
+                            }
+                        }
+                );
+            }
+
+            @Override
+            public void close() {
+                managedChannel.shutdown();
+                while (true) {
+                    try {
+                        managedChannel.awaitTermination(Long.MAX_VALUE, TimeUnit.DAYS);
+                        break;
+                    } catch (InterruptedException e) {
+                        managedChannel.shutdownNow();
                     }
                 }
             }

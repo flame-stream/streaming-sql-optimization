@@ -14,12 +14,12 @@ import static org.junit.Assert.assertEquals;
 public class CoordinatorStatsSourceSinkTest {
     @Test
     public void simpleTest() throws Exception {
-        final var targetStreamObserver = new BiFunction<String, String, StreamObserver<Services.Stats>>() {
+        final var targetStreamObserver = new Function<String, StreamObserver<Services.Stats>>() {
             String target;
             Services.Stats stats;
 
             @Override
-            public StreamObserver<Services.Stats> apply(String target, String another) {
+            public StreamObserver<Services.Stats> apply(String target) {
                 this.target = target;
                 return new StreamObserver<>() {
                     @Override
@@ -42,7 +42,7 @@ public class CoordinatorStatsSourceSinkTest {
                 var ignored = new StatisticsHandling.NIOServer(1111, targetStreamObserver);
                 var client = new StatisticsHandling.StatsSender(
                         new InetSocketAddress("localhost", 1111),
-                        "my message", Collections.emptyList()
+                        "my message"
                 )
         ) {
             client.send(1, Collections.singletonMap("bid", 1.));

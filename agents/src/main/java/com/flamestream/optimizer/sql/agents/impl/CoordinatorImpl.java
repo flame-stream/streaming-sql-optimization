@@ -8,6 +8,7 @@ import com.flamestream.optimizer.sql.agents.source.SourceWrapper;
 import com.flamestream.optimizer.sql.agents.testutils.TestPipelineOptions;
 import com.flamestream.optimizer.sql.agents.util.SqlTransform;
 import com.google.common.collect.ImmutableList;
+import com.google.protobuf.ByteString;
 import io.grpc.stub.StreamObserver;
 import org.apache.beam.sdk.Pipeline;
 import org.apache.beam.sdk.coders.KvCoder;
@@ -51,12 +52,16 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
     private final CostEstimator estimator;
     private final Executor executor;
     private final StatisticsHandling.NIOServer statisticsServer;
+    private final CheckpointsHandling.NIOServer checkpointsServer;
     private final List<Running> runningJobs = new ArrayList<>();
     private BeamRelNode currentGraph = null;
+    private ByteString checkpointMarkString = null;
 
     @Override
     public void close() throws Exception {
         try (statisticsServer) {
+        }
+        try (checkpointsServer) {
         }
     }
 
@@ -85,9 +90,8 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
         this.executor = executor;
         try {
             LOG.info("starting a statistics server on port 1337");
-            statisticsServer = new StatisticsHandling.NIOServer(1337, (target, worker) -> {
-                LOG.info("worker servers addresses " + worker);
-                Arrays.stream(worker.split(" ")).forEach(executor::submitSource);
+            statisticsServer = new StatisticsHandling.NIOServer(1337, target -> {
+                LOG.info("target " + target);
                 return new StreamObserver<>() {
                     @Override
                     public void onNext(Services.Stats value) {
@@ -121,6 +125,32 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+
+        try {
+            checkpointsServer = new CheckpointsHandling.NIOServer(20202, target -> {
+                LOG.info("checkpoints target " + target);
+                return new StreamObserver<>() {
+                    @Override
+                    public void onNext(Services.Checkpoint value) {
+                        // LOG.info("putting a checkpoint to target " + target);
+                        checkpointMarkString = value.getCheckpoint();
+                    }
+
+                    @Override
+                    public void onError(Throwable t) {
+                        LOG.error("error when receiving the checkpoint", t);
+                    }
+
+                    @Override
+                    public void onCompleted() {
+
+                    }
+                };
+            });
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+
     }
 
     public <T> void registerInput(
@@ -213,13 +243,10 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
             Pipeline pipeline, SqlQueryJob sqlQueryJob, QueryPlanner.QueryParameters queryParameters
     ) {
         HashMap<String, PCollection<Row>> tagged = new HashMap<>();
-        List<String> sourceAddresses = new ArrayList<>();
 
         for (var source : sourcesList) {
-            source.applyTransforms(pipeline, sqlQueryJob, tagged, sourceAddresses);
+            source.applyTransforms(pipeline, sqlQueryJob, tagged, checkpointMarkString);
         }
-
-        LOG.info("source addresses: " + String.join(" ", sourceAddresses));
 
         PCollectionTuple withTags = PCollectionTuple.empty(pipeline);
 
@@ -259,12 +286,12 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
         if (!stats.isEmpty()) {
             PCollectionList.of(stats).apply(Flatten.pCollections()).apply(ParDo.of(new StatisticsHandling.StatsDoFn(
                     new InetSocketAddress(1337),
-                    PCollectionList.of(stats).size(),
-                    sourceAddresses
+                    PCollectionList.of(stats).size()
+                    //, sourceAddresses
             )));
         }
 
-        final PCollection<Row> sqlQueryPCollection = withTags.apply(new PTransform<PCollectionTuple, PCollection<Row>>() {
+        final PCollection<Row> sqlQueryPCollection = withTags.apply(new PTransform<>() {
             @Override
             public PCollection<Row> expand(PCollectionTuple input) {
                 return BeamSqlRelUtils.toPCollection(pipeline, beamRelNode);
@@ -275,7 +302,7 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
     }
 
     // TODO visibility
-    private static class SourceWithSchema<T> {
+    public static class SourceWithSchema<T> {
         final UnboundedSource<T, @NonNullType ? extends UnboundedSource.CheckpointMark> source;
         final Schema schema;
         final Map<String, PTransform<PCollection<T>, PCollection<Row>>> tableMapping;
@@ -283,10 +310,12 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
         public void applyTransforms(Pipeline pipeline,
                                     SqlQueryJob sqlQueryJob,
                                     HashMap<String, PCollection<Row>> tagged,
-                                    List<String> sourceAddresses) {
-            SourceWrapper<T, ? extends UnboundedSource.CheckpointMark> sourceWrapper = new SourceWrapper<>(source);
-            // TODO what is the actual host address?
-            sourceAddresses.add("localhost:" + sourceWrapper.getPortNumber());
+                                    ByteString checkpointString) {
+            // TODO let's start with just one checkpoint to see if this works but it's possible that it will lead us nowhere
+            SourceWrapper<T, ? extends UnboundedSource.CheckpointMark> sourceWrapper = checkpointString == null ?
+                    new SourceWrapper<>(source) :
+                    new SourceWrapper<>(source, checkpointString.toByteArray());
+
             PCollection<T> readFromSource = pipeline.apply(Read.from(sourceWrapper))
                     .apply(Window.into(sqlQueryJob.windowFunction()));
 

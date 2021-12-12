@@ -2,6 +2,7 @@ package com.flamestream.optimizer.sql.agents.impl;
 
 import com.flamestream.optimizer.sql.agents.Services;
 import com.flamestream.optimizer.sql.agents.StatsServiceGrpc;
+import com.flamestream.optimizer.sql.agents.util.NetworkUtil;
 import com.google.protobuf.Empty;
 import io.grpc.*;
 import io.grpc.stub.StreamObserver;
@@ -21,15 +22,13 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.SocketException;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
-import java.util.function.BiFunction;
+import java.util.function.Function;
 
 public class StatisticsHandling {
     private static final Metadata.Key<String> TARGET_KEY = Metadata.Key.of("target", Metadata.ASCII_STRING_MARSHALLER);
-    private static final Metadata.Key<String> WORKER_KEY = Metadata.Key.of("worker", Metadata.ASCII_STRING_MARSHALLER);
     public static final int STATS_PORT = 9004;
 
     private static final Logger LOG = LoggerFactory.getLogger("optimizer.statistics");
@@ -57,6 +56,9 @@ public class StatisticsHandling {
 
         @FinishBundle
         public void finishBundle(FinishBundleContext finishBundleContext) {
+            if (finishBundleContext == null || boundedWindow == null) {
+                return;
+            }
             finishBundleContext.output(KV.of(column, (double) i), boundedWindow.maxTimestamp(), boundedWindow);
             i = 0;
         }
@@ -66,12 +68,10 @@ public class StatisticsHandling {
         private final InetSocketAddress executorAddress;
         private final int cardinalitiesNumber;
         private String userAgent;
-        private final List<String> sourceAddresses;
 
-        public StatsDoFn(InetSocketAddress executorAddress, int cardinalitiesNumber, List<String> sourceAddresses) {
+        public StatsDoFn(InetSocketAddress executorAddress, int cardinalitiesNumber) {
             this.executorAddress = executorAddress;
             this.cardinalitiesNumber = cardinalitiesNumber;
-            this.sourceAddresses = sourceAddresses;
         }
 
         private StatsSender statsSender;
@@ -80,9 +80,8 @@ public class StatisticsHandling {
 
         @Setup
         public void setup() throws IOException {
-            LOG.info("setting up stats do fn at " + getLocalAddress().getHostAddress() + STATS_PORT);
-            userAgent = getLocalAddress().getHostAddress() + ":" + STATS_PORT;
-            statsSender = new StatsSender(executorAddress, userAgent, sourceAddresses);
+            userAgent = NetworkUtil.getLocalAddressHost(executorAddress) + ":" + STATS_PORT;
+            statsSender = new StatsSender(executorAddress, userAgent);
         }
 
         @ProcessElement
@@ -125,27 +124,23 @@ public class StatisticsHandling {
         private final Server server;
 
         public NIOServer(
-                int port, BiFunction<String, String, StreamObserver<Services.Stats>> targetStatsObserver
+                int port, Function<String, StreamObserver<Services.Stats>> targetStatsObserver
         ) throws IOException {
             final var targetKey = Context.key("target");
-            final var workerKey = Context.key("worker");
             this.server = ServerBuilder.forPort(port).intercept(new ServerInterceptor() {
                 @Override
                 public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
                         ServerCall<ReqT, RespT> call, Metadata headers, ServerCallHandler<ReqT, RespT> next
                 ) {
-                    System.out.println("worker key" + headers.get(WORKER_KEY));
                     return Contexts.interceptCall(
-                            Context.current()
-                                    .withValue(targetKey, headers.get(TARGET_KEY))
-                                    .withValue(workerKey, headers.get(WORKER_KEY)),
+                            Context.current().withValue(targetKey, headers.get(TARGET_KEY)),
                             call, headers, next
                     );
                 }
             }).addService(new StatsServiceGrpc.StatsServiceImplBase() {
                 @Override
                 public StreamObserver<Services.Stats> push(StreamObserver<Empty> responseObserver) {
-                    final var statsStreamObserver = targetStatsObserver.apply((String) targetKey.get(), (String) workerKey.get());
+                    final var statsStreamObserver = targetStatsObserver.apply((String) targetKey.get());
                     return new StreamObserver<>() {
                         @Override
                         public void onNext(Services.Stats value) {
@@ -191,7 +186,9 @@ public class StatisticsHandling {
         private final ManagedChannel managedChannel;
         private final StreamObserver<Services.Stats> stats;
 
-        public StatsSender(InetSocketAddress address, String target, List<String> sourceAddresses) {
+        public StatsSender(InetSocketAddress address, String target
+                //, List<String> sourceAddresses
+        ) {
             LOG.info("called stats sender constructor");
             managedChannel = ManagedChannelBuilder.forAddress(address.getHostName(), address.getPort())
                     .usePlaintext().intercept(new ClientInterceptor() {
@@ -205,8 +202,8 @@ public class StatisticsHandling {
                                 @Override
                                 public void start(Listener<RespT> responseListener, Metadata headers) {
                                     headers.put(TARGET_KEY, target);
-                                    headers.put(WORKER_KEY, String.join(" ", sourceAddresses));
-                                    LOG.info("source addresses as known to client: " + String.join(" ", sourceAddresses));
+//                                    headers.put(WORKER_KEY, String.join(" ", sourceAddresses));
+//                                    LOG.info("source addresses as known to client: " + String.join(" ", sourceAddresses));
                                     super.start(responseListener, headers);
                                 }
                             };
