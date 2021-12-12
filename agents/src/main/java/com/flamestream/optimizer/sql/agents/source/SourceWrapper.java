@@ -11,6 +11,10 @@ import io.grpc.*;
 import io.grpc.stub.StreamObserver;
 import org.apache.beam.sdk.coders.Coder;
 import org.apache.beam.sdk.io.UnboundedSource;
+import org.apache.beam.sdk.nexmark.model.Auction;
+import org.apache.beam.sdk.nexmark.model.Bid;
+import org.apache.beam.sdk.nexmark.model.Event;
+import org.apache.beam.sdk.nexmark.model.Person;
 import org.apache.beam.sdk.options.PipelineOptions;
 import org.apache.commons.io.output.ByteArrayOutputStream;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -117,9 +121,7 @@ public class SourceWrapper<T, U extends UnboundedSource.CheckpointMark> extends 
                     return false;
                 }
                 if (workerServer.result.equals("Resume")) {
-                    boolean check = current.getMillis() < workerServer.watermark.getMillis();
-//                    LOG.info("resume condition (advance): " + current.getMillis() + " < " + server.watermark.getMillis() + " is " + check);
-                    if (check) {
+                    if (current.getMillis() < workerServer.watermark.getMillis()) {
                         return false;
                     }
                 }
@@ -130,21 +132,7 @@ public class SourceWrapper<T, U extends UnboundedSource.CheckpointMark> extends 
         @Override
         public T getCurrent() throws NoSuchElementException {
             final T res = reader.getCurrent();
-            if (workerServer.result != null) {
-                final Instant current = getCurrentTimestamp();
-                if (workerServer.result.equals("Pause")) {
-                    if (current.getMillis() > workerServer.watermark.getMillis()) {
-                        return null;
-                    }
-                }
-                if (workerServer.result.equals("Resume")) {
-                    boolean check = current.getMillis() < workerServer.watermark.getMillis();
-//                    LOG.info("resume condition (getCurrent): " + current.getMillis() + " < " + server.watermark.getMillis() + " is " + check);
-                    if (check) {
-                        return null;
-                    }
-                }
-            }
+
             /*String text = "";
             if (res instanceof Event) {
                 if (((Event) res).newPerson != null) {
@@ -161,6 +149,21 @@ public class SourceWrapper<T, U extends UnboundedSource.CheckpointMark> extends 
                 }
             }
             LOG.info("element " + text + " on port " + getPortNumber());*/
+
+            if (workerServer.result != null) {
+                final Instant current = getCurrentTimestamp();
+                if (workerServer.result.equals("Pause")) {
+                    if (current.getMillis() > workerServer.watermark.getMillis()) {
+                        return null;
+                    }
+                }
+                if (workerServer.result.equals("Resume")) {
+                    if (current.getMillis() < workerServer.watermark.getMillis()) {
+                        return null;
+                    }
+                }
+            }
+
             return res;
         }
 
