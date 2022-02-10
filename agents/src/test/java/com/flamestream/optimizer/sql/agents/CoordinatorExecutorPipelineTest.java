@@ -52,7 +52,7 @@ public class CoordinatorExecutorPipelineTest {
 
             @Override
             public WindowFn<Object, ? extends BoundedWindow> windowFunction() {
-                return FixedWindows.of(Duration.standardSeconds(1));
+                return FixedWindows.of(Duration.standardSeconds(10));
             }
 
             @Override
@@ -66,7 +66,7 @@ public class CoordinatorExecutorPipelineTest {
         };
 
         // should probably be configured some other way but this was the easiest
-        final String argsString = "--runner=FlinkRunner --query=16 --queryLanguage=sql --streaming=true --manageResources=false --monitorJobs=true --flinkMaster=localhost:8081 --tempLocation=" + folder.getRoot().getAbsolutePath();
+        final String argsString = "--runner=FlinkRunner --streaming=true --manageResources=false --monitorJobs=true --flinkMaster=localhost:8081 --tempLocation=" + folder.getRoot().getAbsolutePath();
         final String[] args = argsString.split(" ");
         final PipelineOptions options = PipelineOptionsFactory.fromArgs(args).withValidation().as(NexmarkOptions.class);
         CoordinatorExecutorPipeline.fromUserQuery(new CostEstimatorImpl(), List.of(source), job, argsString);

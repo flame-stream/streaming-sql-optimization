@@ -314,7 +314,7 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
             // TODO let's start with just one checkpoint to see if this works but it's possible that it will lead us nowhere
             SourceWrapper<T, ? extends UnboundedSource.CheckpointMark> sourceWrapper = checkpointString == null ?
                     new SourceWrapper<>(source) :
-                    new SourceWrapper<>(source, checkpointString.toByteArray());
+                    new SourceWrapper<>(source, true, checkpointString.toByteArray());
 
             PCollection<T> readFromSource = pipeline.apply(Read.from(sourceWrapper))
                     .apply(Window.into(sqlQueryJob.windowFunction()));

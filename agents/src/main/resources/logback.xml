@@ -2,8 +2,9 @@
 
     <appender name="FILE" class="ch.qos.logback.core.FileAppender">
         <file>optimizer.log</file>
+        <param name="Append" value="false" />
         <encoder>
-            <pattern>%date %level [%thread] %logger{10} [%file:%line] %msg%n</pattern>
+            <pattern>%date %logger{10} [%file:%line] %msg%n</pattern>
         </encoder>
     </appender>
 

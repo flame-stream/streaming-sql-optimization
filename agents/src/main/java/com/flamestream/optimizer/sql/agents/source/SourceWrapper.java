@@ -11,10 +11,6 @@ import io.grpc.*;
 import io.grpc.stub.StreamObserver;
 import org.apache.beam.sdk.coders.Coder;
 import org.apache.beam.sdk.io.UnboundedSource;
-import org.apache.beam.sdk.nexmark.model.Auction;
-import org.apache.beam.sdk.nexmark.model.Bid;
-import org.apache.beam.sdk.nexmark.model.Event;
-import org.apache.beam.sdk.nexmark.model.Person;
 import org.apache.beam.sdk.options.PipelineOptions;
 import org.apache.commons.io.output.ByteArrayOutputStream;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -31,6 +27,7 @@ import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 // TODO fix nullability annotations, remove all other annotations
 public class SourceWrapper<T, U extends UnboundedSource.CheckpointMark> extends UnboundedSource<T, U> {
@@ -44,15 +41,23 @@ public class SourceWrapper<T, U extends UnboundedSource.CheckpointMark> extends 
 
     private final byte[] checkpointMarkSerialized;
 
+    private final boolean holdUntilResume;
+
     public SourceWrapper(final UnboundedSource<T, U> source) {
-        this(source, null);
+        this(source, false, null);
     }
 
-    public SourceWrapper(final UnboundedSource<T, U> source, final byte[] mark) {
+    public SourceWrapper(final UnboundedSource<T, U> source, boolean holdUntilResume) {
+        this(source, holdUntilResume, null);
+    }
+
+    public SourceWrapper(final UnboundedSource<T, U> source, boolean holdUntilResume, final byte[] mark) {
         this.source = source;
+        this.holdUntilResume = holdUntilResume;
         this.portNumber = ThreadLocalRandom.current().nextInt(9000, 65000);
         this.checkpointMarkSerialized = mark;
         LOG.info("chose port number " + this.portNumber);
+        LOG.info("hold until resume " + holdUntilResume);
     }
 
     public int getPortNumber() {
@@ -93,6 +98,8 @@ public class SourceWrapper<T, U extends UnboundedSource.CheckpointMark> extends 
         private final WorkerServer workerServer;
         private final CheckpointsSender checkpointsSender;
 
+        private boolean startedEmitting = false;
+
         private ReaderWrapper(final UnboundedReader<T> reader) throws IOException {
             this.reader = reader;
             LOG.info("started worker server on source on port " + portNumber);
@@ -105,33 +112,66 @@ public class SourceWrapper<T, U extends UnboundedSource.CheckpointMark> extends 
 
         @Override
         public boolean start() throws IOException {
-            return reader.start();
+            return advance();
         }
 
         @Override
         public boolean advance() throws IOException {
             final boolean res = reader.advance();
-            if (workerServer.result != null) {
-                final Instant current = getCurrentTimestamp();
-                if (workerServer.result.equals("Pause")) {
-                    // TODO pause actually needs to return the max watermark that the executor agreed upon
-                    /*if (current.getMillis() > server.watermark.getMillis()) {
-                        return false;
-                    }*/
-                    return false;
-                }
-                if (workerServer.result.equals("Resume")) {
-                    if (current.getMillis() < workerServer.watermark.getMillis()) {
+
+//            LOG.info(workerServer.resultRef.get() + " " + portNumber);
+            if (!"Resume".equals(workerServer.resultRef.get()) && holdUntilResume) {
+                return false;
+            }
+
+            if (workerServer.resultRef.get() != null) {
+                Instant current = getCurrentTimestamp();
+                if (workerServer.resultRef.get().equals("Halt")) {
+                    if (current.getMillis() > workerServer.watermark.getMillis()) {
                         return false;
                     }
                 }
+                if (workerServer.resultRef.get().equals("Resume")) {
+                    while (current.getMillis() <= workerServer.watermark.getMillis()) {
+                        reader.getCurrent();
+                        reader.advance();
+                        current = getCurrentTimestamp();
+                    }
+                }
             }
+
+            if (!startedEmitting) {
+                startedEmitting = true;
+                LOG.info("started emitting");
+            }
+
             return res;
         }
 
         @Override
         public T getCurrent() throws NoSuchElementException {
             final T res = reader.getCurrent();
+
+            if (workerServer.resultRef.get() == null && holdUntilResume) {
+                LOG.info("holding until resume");
+                return null;
+            }
+
+            if (workerServer.resultRef.get() != null) {
+                final Instant current = getCurrentTimestamp();
+                if (workerServer.resultRef.get().equals("Halt")) {
+                    if (current.getMillis() > workerServer.watermark.getMillis()) {
+                        LOG.info("this halt has served its purpose in getCurrent");
+                        return null;
+                    }
+                }
+                if (workerServer.resultRef.get().equals("Resume")) {
+                    // technically this should never happen
+                    if (current.getMillis() <= workerServer.watermark.getMillis()) {
+                        return null;
+                    }
+                }
+            }
 
             /*String text = "";
             if (res instanceof Event) {
@@ -149,20 +189,6 @@ public class SourceWrapper<T, U extends UnboundedSource.CheckpointMark> extends 
                 }
             }
             LOG.info("element " + text + " on port " + getPortNumber());*/
-
-            if (workerServer.result != null) {
-                final Instant current = getCurrentTimestamp();
-                if (workerServer.result.equals("Pause")) {
-                    if (current.getMillis() > workerServer.watermark.getMillis()) {
-                        return null;
-                    }
-                }
-                if (workerServer.result.equals("Resume")) {
-                    if (current.getMillis() < workerServer.watermark.getMillis()) {
-                        return null;
-                    }
-                }
-            }
 
             return res;
         }
@@ -215,14 +241,24 @@ public class SourceWrapper<T, U extends UnboundedSource.CheckpointMark> extends 
                     @Override
                     public void pause(Services.Empty request, StreamObserver<Services.Timestamp> responseObserver) {
                         LOG.info("pause called on server on source");
-                        result = "Pause"; // Looks Bad
+                        resultRef.set("Pause");
+//                        result = "Pause"; // Looks Bad
                         responseObserver.onNext(Services.Timestamp.newBuilder().setValue(getWatermark().getMillis()).build());
+                    }
+
+                    @Override
+                    public void halt(Services.Timestamp request, StreamObserver<Services.Empty> responseObserver) {
+                        LOG.info("halt called on server on source");
+                        resultRef.compareAndSet("Pause", "Halt");
+                        watermark = Instant.ofEpochMilli(request.getValue());
+                        responseObserver.onNext(Services.Empty.newBuilder().getDefaultInstanceForType());
                     }
 
                     @Override
                     public void resumeTo(Services.Timestamp request, StreamObserver<Services.Empty> responseObserver) {
                         LOG.info("resume called on server on source");
-                        result = "Resume";
+                        resultRef.set("Resume");
+//                        result = "Resume";
                         watermark = Instant.ofEpochMilli(request.getValue());
                         responseObserver.onNext(Services.Empty.newBuilder().getDefaultInstanceForType());
                     }
@@ -232,6 +268,7 @@ public class SourceWrapper<T, U extends UnboundedSource.CheckpointMark> extends 
             }
 
             public String result;
+            public AtomicReference<String> resultRef = new AtomicReference<>();
 
             @Override
             public void close() throws Exception {

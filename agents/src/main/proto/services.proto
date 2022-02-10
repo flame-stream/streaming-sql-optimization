@@ -28,6 +28,7 @@ service StatsService {
 
 service WorkerService {
   rpc Pause(Empty) returns (Timestamp);
+  rpc Halt(Timestamp) returns (Empty);
   rpc ResumeTo(Timestamp) returns (Empty);
 }
 

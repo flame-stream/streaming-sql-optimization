@@ -17,7 +17,7 @@ import java.util.Map;
 public class TestSource {
     private static final Monitor<Event> eventMonitor = new Monitor<>("TestMonitor" + ".Events", "event");
 
-    public static PTransform<PCollection<Event>, PCollection<Row>> auctionTransform = new PTransform<PCollection<Event>, PCollection<Row>>() {
+    public static PTransform<PCollection<Event>, PCollection<Row>> auctionTransform = new PTransform<>() {
         @Override
         public PCollection<Row> expand(PCollection<Event> input) {
             return input // Monitor events as they go by.
@@ -29,7 +29,7 @@ public class TestSource {
         }
     };
 
-    public static PTransform<PCollection<Event>, PCollection<Row>> bidTransform = new PTransform<PCollection<Event>, PCollection<Row>>() {
+    public static PTransform<PCollection<Event>, PCollection<Row>> bidTransform = new PTransform<>() {
         @Override
         public PCollection<Row> expand(PCollection<Event> input) {
             return input // Monitor events as they go by.
@@ -41,7 +41,7 @@ public class TestSource {
         }
     };
 
-    public static PTransform<PCollection<Event>, PCollection<Row>> personTransform = new PTransform<PCollection<Event>, PCollection<Row>>() {
+    public static PTransform<PCollection<Event>, PCollection<Row>> personTransform = new PTransform<>() {
         @Override
         public PCollection<Row> expand(PCollection<Event> input) {
             return input // Monitor events as they go by.
@@ -63,16 +63,16 @@ public class TestSource {
 
     public static UnboundedEventSource getTestSource() {
         final NexmarkConfiguration config = NexmarkConfiguration.DEFAULT;
-        config.numEvents = 30000;
+        config.numEvents = 1000000;
         config.isRateLimited = true;
-        config.streamTimeout = 5 * 60;
+        config.streamTimeout = 10 * 60;
 //        config.useWallclockEventTime = true;
         config.useWallclockEventTime = false;
         config.numEventGenerators = 1;
         config.probDelayedEvent = 0.0;
         config.occasionalDelaySec = 0;
-        config.firstEventRate = 500;
-        config.nextEventRate = 500;
+        config.firstEventRate = 10000;
+        config.nextEventRate = 10000;
         var generatorConfig = new GeneratorConfig(
                 config,
                 1637695440019L,

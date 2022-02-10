@@ -1,6 +1,9 @@
 package com.flamestream.optimizer.sql.agents.impl;
 
-import com.flamestream.optimizer.sql.agents.*;
+import com.flamestream.optimizer.sql.agents.AddressServiceGrpc;
+import com.flamestream.optimizer.sql.agents.Executor;
+import com.flamestream.optimizer.sql.agents.Services;
+import com.flamestream.optimizer.sql.agents.WorkerServiceGrpc;
 import com.google.protobuf.Empty;
 import io.grpc.*;
 import io.grpc.stub.StreamObserver;
@@ -37,15 +40,18 @@ public class ExecutorImpl implements Executor, Serializable, AutoCloseable {
     private Pipeline currentPipeline = null;
 //    private final PipelineOptions options;
     private final String optionsArguments;
-    private CountDownLatch latch = null;
+
+    private CountDownLatch newGraphLatch = null;
 
     private final List<SourceCommunicator> currentSources;
+    private final List<SourceCommunicator> newSources;
 
     private final AddressesServer addressesServer;
 
     public ExecutorImpl(final String optionsArguments) {
         this.optionsArguments = optionsArguments;
         currentSources = new ArrayList<>();
+        newSources = new ArrayList<>();
         try {
             addressesServer = new AddressesServer(30303);
         } catch (IOException e) {
@@ -65,14 +71,14 @@ public class ExecutorImpl implements Executor, Serializable, AutoCloseable {
         final String host = sourceHostAndPort.substring(0, sourceHostAndPort.lastIndexOf(':'));
         final int port = Integer.parseInt(sourceHostAndPort.substring(sourceHostAndPort.lastIndexOf(':') + 1));
         // TODO blatant hack, replace with some vaguely coherent logic later, like labeling each source with a pipeline number or something
-        if (currentSources.stream().noneMatch(it -> it.address.getHostName().equals(host) && it.address.getPort() == port)) {
+        if (newSources.stream().noneMatch(it -> it.address.getHostName().equals(host) && it.address.getPort() == port)) {
             LOG.info("adding source on executor: " + sourceHostAndPort);
             final SourceCommunicator source = new SourceCommunicator(new InetSocketAddress(host, port));
-            currentSources.add(source);
+            newSources.add(source);
         }
-        if (latch != null) {
+        if (newGraphLatch != null) {
             LOG.info("counting down the latch");
-            latch.countDown();
+            newGraphLatch.countDown();
         }
     }
 
@@ -95,30 +101,42 @@ public class ExecutorImpl implements Executor, Serializable, AutoCloseable {
 
         LOG.info("current pipeline is not null " + (currentPipeline != null));
         if (currentPipeline != null) {
-            // TODO replace instants with longs and all that, unnecessary complications
+            // old graph is currently in new sources -- transfer it to current sources
+            currentSources.clear();
+            currentSources.addAll(newSources);
+            newSources.clear();
+
+            CountDownLatch pauseLatch = new CountDownLatch(currentSources.size());
+            newGraphLatch = new CountDownLatch(currentSources.size());
+
+            pipeline.getOptions().setJobName("new_graph");
+            newRunner.run(pipeline);
+
+            LOG.info("about to wait on latch");
+            newGraphLatch.await();
+
             final List<Long> watermarks = new ArrayList<>();
             for (SourceCommunicator source : currentSources) {
                 LOG.info("calling pause on source " + source.address);
-                source.pause(watermarks);
+                source.pause(watermarks, pauseLatch);
             }
-            latch = new CountDownLatch(currentSources.size());
 
-            // TODO maybe not
-            currentSources.clear();
-
-            pipeline.getOptions().setJobName("new_graph");
-            final PipelineResult res = newRunner.run(pipeline);
-            LOG.info("about to wait on latch");
-            latch.await();
-            currentPipeline = pipeline;
-
+            LOG.info("wait on pause latch");
+            pauseLatch.await();
+            LOG.info("pause latch is ok actually");
             final long maxWatermark = Collections.max(watermarks);
+            for (SourceCommunicator source : currentSources) {
+                LOG.info("calling halt on executor " + source.address);
+                source.halt(maxWatermark);
+            }
+
+            currentPipeline = pipeline;
+            currentSources.clear();
+            currentSources.addAll(newSources);
+            newSources.clear();
             for (SourceCommunicator source : currentSources) {
                 source.resumeTo(maxWatermark);
             }
-
-            // TODO should we?
-            res.waitUntilFinish();
         }
         else {
             currentPipeline = pipeline;
@@ -162,7 +180,7 @@ public class ExecutorImpl implements Executor, Serializable, AutoCloseable {
             stub = WorkerServiceGrpc.newStub(managedChannel);
         }
 
-        public void pause(final List<Long> watermarks) {
+        public void pause(final List<Long> watermarks, final CountDownLatch pauseLatch) {
             Context newContext = Context.current().fork();
             Context origContext = newContext.attach();
             try {
@@ -172,6 +190,7 @@ public class ExecutorImpl implements Executor, Serializable, AutoCloseable {
                         LOG.info("next " + value.getValue());
                         watermark = Instant.ofEpochMilli(value.getValue());
                         watermarks.add(watermark.getMillis());
+                        pauseLatch.countDown();
                     }
 
                     @Override
@@ -181,6 +200,31 @@ public class ExecutorImpl implements Executor, Serializable, AutoCloseable {
 
                     @Override
                     public void onCompleted() {
+                    }
+                });
+            } finally {
+                newContext.detach(origContext);
+            }
+        }
+
+        public void halt(long watermark) {
+            Context newContext = Context.current().fork();
+            Context origContext = newContext.attach();
+            try {
+                stub.halt(Services.Timestamp.newBuilder().setValue(watermark).build(), new StreamObserver<>() {
+                    @Override
+                    public void onNext(Services.Empty value) {
+                        LOG.info("called halt at " + watermark + " on executor client");
+                    }
+
+                    @Override
+                    public void onError(Throwable t) {
+                        LOG.error("an error reported by executor client in resume to", t);
+                    }
+
+                    @Override
+                    public void onCompleted() {
+
                     }
                 });
             } finally {

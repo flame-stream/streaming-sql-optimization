@@ -61,6 +61,7 @@ public class StatisticsHandling {
             }
             finishBundleContext.output(KV.of(column, (double) i), boundedWindow.maxTimestamp(), boundedWindow);
             i = 0;
+            boundedWindow = null;
         }
     }
 
