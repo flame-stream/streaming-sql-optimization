@@ -8,6 +8,22 @@
         </encoder>
     </appender>
 
+    <appender name="GENERATOR_FILE" class="ch.qos.logback.core.FileAppender">
+        <file>generator.log</file>
+        <param name="Append" value="false" />
+        <encoder>
+            <pattern>%date %logger{10} [%file:%line] %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <appender name="LATENCY_FILE" class="ch.qos.logback.core.FileAppender">
+        <file>latency.log</file>
+        <param name="Append" value="false" />
+        <encoder>
+            <pattern>%date %logger{10} [%file:%line] %msg%n</pattern>
+        </encoder>
+    </appender>
+
 
     <!--<appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
@@ -31,6 +47,12 @@
     </logger>
     <logger name="pipeline.test" level="info">
         <appender-ref ref="FILE" />
+    </logger>
+    <logger name="generator" level="info">
+        <appender-ref ref="GENERATOR_FILE" />
+    </logger>
+    <logger name="latency" level="info">
+        <appender-ref ref="LATENCY_FILE" />
     </logger>
 
 </configuration>

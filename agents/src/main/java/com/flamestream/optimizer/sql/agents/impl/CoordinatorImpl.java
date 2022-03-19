@@ -4,6 +4,7 @@ import com.flamestream.optimizer.sql.agents.Coordinator;
 import com.flamestream.optimizer.sql.agents.CostEstimator;
 import com.flamestream.optimizer.sql.agents.Executor;
 import com.flamestream.optimizer.sql.agents.Services;
+import com.flamestream.optimizer.sql.agents.latency.*;
 import com.flamestream.optimizer.sql.agents.source.SourceWrapper;
 import com.flamestream.optimizer.sql.agents.testutils.TestPipelineOptions;
 import com.flamestream.optimizer.sql.agents.util.SqlTransform;
@@ -25,13 +26,16 @@ import org.apache.beam.sdk.extensions.sql.impl.schema.BeamPCollectionTable;
 import org.apache.beam.sdk.extensions.sql.meta.provider.ReadOnlyTableProvider;
 import org.apache.beam.sdk.io.Read;
 import org.apache.beam.sdk.io.UnboundedSource;
+import org.apache.beam.sdk.options.PipelineOptions;
 import org.apache.beam.sdk.schemas.Schema;
 import org.apache.beam.sdk.transforms.*;
+import org.apache.beam.sdk.transforms.windowing.BoundedWindow;
 import org.apache.beam.sdk.transforms.windowing.Window;
 import org.apache.beam.sdk.values.*;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.plan.RelOptCost;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rel.metadata.RelMetadataProvider;
 import org.checkerframework.checker.nullness.compatqual.NonNullType;
+import org.joda.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -104,10 +108,9 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
                                 ))
                         );
                         LOG.info("cost " + cost.toString());
-                        LOG.info("hacky " + ExecutorImpl.HACKY_VARIABLE);
-                        if (ExecutorImpl.HACKY_VARIABLE <= 1) {
+                        /*if (ExecutorImpl.HACKY_VARIABLE <= 1) {
                             tryNewGraph(runningJobs.get(0).sqlQueryJob);
-                        }
+                        }*/
                     }
 
                     @Override
@@ -297,6 +300,19 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
                 return BeamSqlRelUtils.toPCollection(pipeline, beamRelNode);
             }
         });
+
+
+        Schema withArrivalTime = Schema.builder()
+                .addFields(sqlQueryPCollection.getSchema().getFields()).addDateTimeField("arrivalTime").build();
+
+        PCollection<Latency> latency =
+                sqlQueryPCollection.apply(MapElements.via(new AddCurrentTimeToRow(withArrivalTime)))
+                        .setRowSchema(withArrivalTime)
+                        .apply(Combine.globally(new LatencyCombineFn()).withoutDefaults())
+                        .setCoder(Latency.CODER);
+
+        latency.apply(ParDo.of(new LatencyLoggingFunction()));
+
         sqlQueryJob.outputs().forEach(sqlQueryPCollection::apply);
         return beamRelNode;
     }
@@ -320,7 +336,12 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
                     .apply(Window.into(sqlQueryJob.windowFunction()));
 
             for (var entry : tableMapping.entrySet()) {
-                tagged.put(entry.getKey(), readFromSource.apply(entry.getValue()));
+                PCollection<Row> rows = readFromSource.apply(entry.getValue());
+                Schema withReceiveTime = Schema.builder()
+                        .addFields(rows.getSchema().getFields()).addDateTimeField("receiveTime").build();
+                rows = rows.apply(MapElements.via(new AddCurrentTimeToRow(withReceiveTime)))
+                        .setRowSchema(withReceiveTime);
+                tagged.put(entry.getKey(), rows);
             }
         }
 
@@ -343,6 +364,36 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
         @ProcessElement
         public void processElement(ProcessContext context) {
             context.output(KV.of(context.element().getValue(fieldName), null));
+        }
+    }
+
+    public static class LatencyLoggingFunction extends DoFn<Latency, Void> {
+        @Setup
+        public void setup() {
+            LOG.info("set up the logging function");
+        }
+
+
+        @ProcessElement
+        public void processElement(@Element Latency element, PipelineOptions options) {
+            LOG.info(options.getJobName());
+            LOG.info(element.toString());
+        }
+    }
+
+    public static class RowLoggingFunction extends DoFn<Row, Row> {
+        private boolean logged = false;
+        @ProcessElement
+        public void processElement(ProcessContext context, BoundedWindow window) {
+            Row input = context.element();
+            if (input == null) {
+                return;
+            }
+            if (input.getSchema().getFieldNames().contains("dateTime1")) {
+//                LOG.info("window max timestamp " + window.maxTimestamp());
+                LOG.info("element " + input.toString(true));
+            }
+            context.output(input);
         }
     }
 }

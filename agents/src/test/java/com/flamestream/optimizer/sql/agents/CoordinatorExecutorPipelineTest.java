@@ -44,9 +44,12 @@ public class CoordinatorExecutorPipelineTest {
                 return ""
                         + " SELECT "
                         + "    *   "
-                        + " FROM   "
+                        /*+ " FROM   "
                         + "    Auction A INNER JOIN Person P on A.seller = P.id "
-                        + "       INNER JOIN Bid B on B.bidder = P.id" +
+                        + "       INNER JOIN Bid B on B.bidder = P.id" +*/
+                        + " FROM   "
+                        + "    Bid B INNER JOIN Person P on B.bidder = P.id "
+                        + "    INNER JOIN Auction A on A.seller = P.id " +
                         "";
             }
 
@@ -59,14 +62,17 @@ public class CoordinatorExecutorPipelineTest {
             public Stream<PTransform<PCollection<Row>, PDone>> outputs() {
                 return Stream.of(PTransform.compose(
                         (PCollection<Row> rows) -> {
-                            PCollection<String> strings = rows.apply(ParDo.of(new RowToStringFunction())).apply(ParDo.of(new LoggingFunction()));
+                            PCollection<String> strings = rows.apply(ParDo.of(new RowToStringFunction()));
+//                                    .apply(ParDo.of(new LoggingFunction()));
                             return PDone.in(strings.getPipeline());
+//                            return PDone.in(rows.getPipeline());
                         }));
             }
         };
 
         // should probably be configured some other way but this was the easiest
         final String argsString = "--runner=FlinkRunner --streaming=true --manageResources=false --monitorJobs=true --flinkMaster=localhost:8081 --tempLocation=" + folder.getRoot().getAbsolutePath();
+//        final String argsString = "--runner=FlinkRunner --streaming=true --manageResources=false --monitorJobs=true --flinkMaster=[local] --tempLocation=" + folder.getRoot().getAbsolutePath();
         final String[] args = argsString.split(" ");
         final PipelineOptions options = PipelineOptionsFactory.fromArgs(args).withValidation().as(NexmarkOptions.class);
         CoordinatorExecutorPipeline.fromUserQuery(new CostEstimatorImpl(), List.of(source), job, argsString);
