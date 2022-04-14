@@ -1,6 +1,5 @@
 package com.flamestream.optimizer.sql.agents.latency;
 
-import org.apache.beam.sdk.coders.*;
 import org.apache.beam.sdk.transforms.Combine;
 import org.apache.beam.sdk.values.Row;
 import org.checkerframework.checker.initialization.qual.Initialized;
@@ -10,9 +9,6 @@ import org.joda.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.io.Serializable;
 
 /**
@@ -40,7 +36,7 @@ public class LatencyCombineFn extends Combine.CombineFn<Row, LatencyCombineFn.Ac
                 Instant timestamp1 = input.getValue("receiveTime");
                 Instant timestamp2 = input.getValue("receiveTime0");
                 Instant timestamp3 = input.getValue("receiveTime1");
-                Instant arrivalTime = input.getValue("arrivalTime");
+                Instant arrivalTime = Instant.now();
                 if (timestamp1 != null && timestamp1.getMillis() > timestamp.getMillis()) {
                     timestamp = timestamp1;
                 }
@@ -50,21 +46,19 @@ public class LatencyCombineFn extends Combine.CombineFn<Row, LatencyCombineFn.Ac
                 if (timestamp3 != null && timestamp3.getMillis() > timestamp.getMillis()) {
                     timestamp = timestamp3;
                 }
-                if (arrivalTime != null) {
-                    // uncomment to calculate the mean value
+                // uncomment to calculate the mean value
 //                     mutableAccumulator.sum += arrivalTime.minus(timestamp.getMillis()).getMillis();
 //                     mutableAccumulator.count++;
 
-                    // store the element with max arrival time
-                    if (timestamp.getMillis() > mutableAccumulator.first) {
-                        mutableAccumulator.first = timestamp.getMillis();
+                // store the element with max arrival time
+                if (timestamp.getMillis() > mutableAccumulator.first) {
+                    mutableAccumulator.first = timestamp.getMillis();
 //                        mutableAccumulator.second = arrivalTime.getMillis();
-                    }
+                }
 
-                    // store last element exit time as a second
-                    if (arrivalTime.getMillis() > mutableAccumulator.second) {
-                        mutableAccumulator.second = arrivalTime.getMillis();
-                    }
+                // store last element exit time as a second
+                if (arrivalTime.getMillis() > mutableAccumulator.second) {
+                    mutableAccumulator.second = arrivalTime.getMillis();
                 }
             }
         }
@@ -91,21 +85,9 @@ public class LatencyCombineFn extends Combine.CombineFn<Row, LatencyCombineFn.Ac
         if (accumulator != null) {
             // uncomment when calculating the mean value instead of the max value
 //             return new Latency(accumulator.sum / accumulator.count);
-
             return new Latency(accumulator.second - accumulator.first);
         }
         return new Latency(0);
-    }
-
-    @Override
-    public Coder<Accumulator> getAccumulatorCoder(CoderRegistry registry, Coder<Row> inputCoder) throws CannotProvideCoderException {
-        return new AccumulatorCoder();
-    }
-
-    // technically this thing should actually be in the registry no?
-    @Override
-    public Coder<Latency> getDefaultOutputCoder(CoderRegistry registry, Coder<Row> inputCoder) throws CannotProvideCoderException {
-        return Latency.CODER;
     }
 
     public static class Accumulator implements Serializable {
@@ -113,24 +95,6 @@ public class LatencyCombineFn extends Combine.CombineFn<Row, LatencyCombineFn.Ac
         long second = 0; // you can use this as count for mean value calculation. or as max arrival time
 
         public Accumulator() {
-        }
-    }
-
-   public static class AccumulatorCoder extends AtomicCoder<Accumulator> {
-        private static final Coder<Long> LONG_CODER = VarLongCoder.of();
-
-        @Override
-        public void encode(Accumulator value, OutputStream outStream) throws CoderException, IOException {
-            LONG_CODER.encode(value.first, outStream);
-            LONG_CODER.encode(value.second, outStream);
-        }
-
-        @Override
-        public Accumulator decode(InputStream inStream) throws CoderException, IOException {
-            Accumulator accumulator = new Accumulator();
-            accumulator.first = LONG_CODER.decode(inStream);
-            accumulator.second = LONG_CODER.decode(inStream);
-            return accumulator;
         }
     }
 }

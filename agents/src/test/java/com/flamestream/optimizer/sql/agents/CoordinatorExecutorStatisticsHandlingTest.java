@@ -4,10 +4,8 @@ import com.flamestream.optimizer.sql.agents.impl.CoordinatorImpl;
 import com.flamestream.optimizer.sql.agents.impl.CostEstimatorImpl;
 import com.flamestream.optimizer.sql.agents.impl.ExecutorImpl;
 import com.flamestream.optimizer.sql.agents.testutils.TestSource;
-import com.flamestream.optimizer.testutils.TestUnboundedRowSource;
 import org.apache.beam.sdk.io.TextIO;
 import org.apache.beam.sdk.nexmark.NexmarkOptions;
-import org.apache.beam.sdk.nexmark.NexmarkUtils;
 import org.apache.beam.sdk.nexmark.model.Event;
 import org.apache.beam.sdk.options.PipelineOptions;
 import org.apache.beam.sdk.options.PipelineOptionsFactory;
@@ -51,14 +49,16 @@ public class CoordinatorExecutorStatisticsHandlingTest {
 
         final UserSource<Event> source = new UserSource<>(
                 TestSource.getTestSource(),
-                TestUnboundedRowSource.SCHEMA,
-                TestSource.getTestMappingMap()
+                TestSource.SCHEMA,
+                TestSource.getTestMappingMap(),
+                TestSource.getTestAdditionalTransforms()
         );
 
         coordinator.registerInput(
                 source.getSource(),
                 source.getSchema(),
-                source.getTableMapping()
+                source.getTableMapping(),
+                source.getAdditionalTransforms()
         );
 
         final Coordinator.SqlQueryJob job = new Coordinator.SqlQueryJob() {

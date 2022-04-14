@@ -37,12 +37,11 @@ public class GeneratorConfig implements Serializable {
     public static final long FIRST_CATEGORY_ID = 10L;
 
     /** Proportions of people/auctions/bids to synthesize. */
-    public static int PERSON_PROPORTION = 5;
+    public int personProportion;
 
-    public static int AUCTION_PROPORTION = 5;
-    private static int BID_PROPORTION = 90;
-    public static int PROPORTION_DENOMINATOR =
-            PERSON_PROPORTION + AUCTION_PROPORTION + BID_PROPORTION;
+    public int auctionProportion;
+    public int bidProportion;
+    public int proportionDenominator;
 
     /** Environment options. */
     private final NexmarkConfiguration configuration;
@@ -93,11 +92,11 @@ public class GeneratorConfig implements Serializable {
             long maxEventsOrZero,
             long firstEventNumber) {
 
-        PERSON_PROPORTION = configuration.PERSON_PROPORTION;
-        AUCTION_PROPORTION = configuration.AUCTION_PROPORTION;
-        BID_PROPORTION = configuration.BID_PROPORTION;
-        PROPORTION_DENOMINATOR =
-                PERSON_PROPORTION + AUCTION_PROPORTION + BID_PROPORTION;
+        personProportion = configuration.PERSON_PROPORTION;
+        auctionProportion = configuration.AUCTION_PROPORTION;
+        bidProportion = configuration.BID_PROPORTION;
+        proportionDenominator =
+                personProportion + auctionProportion + bidProportion;
 
         this.configuration = configuration;
         this.interEventDelayUs =
@@ -111,7 +110,7 @@ public class GeneratorConfig implements Serializable {
             // Scale maximum down to avoid overflow in getEstimatedSizeBytes.
             this.maxEvents =
                     Long.MAX_VALUE
-                            / ((long) PROPORTION_DENOMINATOR
+                            / ((long) proportionDenominator
                             * Math.max(
                             Math.max(configuration.avgPersonByteSize, configuration.avgAuctionByteSize),
                             configuration.avgBidByteSize));
@@ -174,9 +173,9 @@ public class GeneratorConfig implements Serializable {
     /** Return an estimate of the bytes needed by {@code numEvents}. */
     public long estimatedBytesForEvents(long numEvents) {
         long numPersons =
-                (numEvents * GeneratorConfig.PERSON_PROPORTION) / GeneratorConfig.PROPORTION_DENOMINATOR;
-        long numAuctions = (numEvents * AUCTION_PROPORTION) / PROPORTION_DENOMINATOR;
-        long numBids = (numEvents * BID_PROPORTION) / PROPORTION_DENOMINATOR;
+                (numEvents * personProportion) / proportionDenominator;
+        long numAuctions = (numEvents * auctionProportion) / proportionDenominator;
+        long numBids = (numEvents * bidProportion) / proportionDenominator;
         return numPersons * configuration.avgPersonByteSize
                 + numAuctions * configuration.avgAuctionByteSize
                 + numBids * configuration.avgBidByteSize;

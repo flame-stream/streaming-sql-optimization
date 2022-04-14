@@ -4,7 +4,9 @@ import com.flamestream.optimizer.sql.agents.Coordinator;
 import com.flamestream.optimizer.sql.agents.CostEstimator;
 import com.flamestream.optimizer.sql.agents.Executor;
 import com.flamestream.optimizer.sql.agents.Services;
-import com.flamestream.optimizer.sql.agents.latency.*;
+import com.flamestream.optimizer.sql.agents.latency.AddCurrentTimeToRow;
+import com.flamestream.optimizer.sql.agents.latency.Latency;
+import com.flamestream.optimizer.sql.agents.latency.LatencyCombineFn;
 import com.flamestream.optimizer.sql.agents.source.SourceWrapper;
 import com.flamestream.optimizer.sql.agents.testutils.TestPipelineOptions;
 import com.flamestream.optimizer.sql.agents.util.SqlTransform;
@@ -35,7 +37,6 @@ import org.apache.beam.sdk.values.*;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.plan.RelOptCost;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rel.metadata.RelMetadataProvider;
 import org.checkerframework.checker.nullness.compatqual.NonNullType;
-import org.joda.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -60,6 +61,9 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
     private final List<Running> runningJobs = new ArrayList<>();
     private BeamRelNode currentGraph = null;
     private ByteString checkpointMarkString = null;
+
+    private SqlQueryJob newJob = null;
+    private int windowCounter = 0;
 
     @Override
     public void close() throws Exception {
@@ -108,8 +112,17 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
                                 ))
                         );
                         LOG.info("cost " + cost.toString());
+                        windowCounter++;
+                        if (windowCounter == 20) {
+                            if (newJob != null) {
+                                LOG.info("switching plans");
+                                tryNewGraph(newJob);
+                            } else {
+                                tryNewGraph(runningJobs.get(0).sqlQueryJob);
+                            }
+                        }
                         /*if (ExecutorImpl.HACKY_VARIABLE <= 1) {
-                            tryNewGraph(runningJobs.get(0).sqlQueryJob);
+
                         }*/
                     }
 
@@ -159,10 +172,11 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
     public <T> void registerInput(
             UnboundedSource<T, @NonNullType ? extends UnboundedSource.CheckpointMark> source,
             Schema sourceSchema,
-            Map<String, PTransform<PCollection<T>, PCollection<Row>>> tableMapping
-    ) {
+            Map<String, PTransform<PCollection<T>, PCollection<Row>>> tableMapping,
+            Map<String, PTransform<PCollection<T>, PCollection<T>>> additionalTransforms) {
         LOG.info("registering user source with schema " + sourceSchema.toString());
-        sourcesList.add(new SourceWithSchema<>(source, sourceSchema, tableMapping));
+        // TODO by the way i don't think we're even using the schema anymore
+        sourcesList.add(new SourceWithSchema<>(source, sourceSchema, tableMapping, additionalTransforms));
     }
 
     @Override
@@ -183,6 +197,12 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
             e.printStackTrace();
         }
         return runningSqlQueryJob;
+    }
+
+    @Override
+    public RunningSqlQueryJob startAndReplaceLater(SqlQueryJob sqlQueryJob, SqlQueryJob newSqlQueryJob) {
+        newJob = newSqlQueryJob;
+        return start(sqlQueryJob);
     }
 
     @Override
@@ -301,17 +321,10 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
             }
         });
 
+        pipeline.getCoderRegistry().registerCoderForClass(Latency.class, Latency.CODER);
 
-        Schema withArrivalTime = Schema.builder()
-                .addFields(sqlQueryPCollection.getSchema().getFields()).addDateTimeField("arrivalTime").build();
-
-        PCollection<Latency> latency =
-                sqlQueryPCollection.apply(MapElements.via(new AddCurrentTimeToRow(withArrivalTime)))
-                        .setRowSchema(withArrivalTime)
-                        .apply(Combine.globally(new LatencyCombineFn()).withoutDefaults())
-                        .setCoder(Latency.CODER);
-
-        latency.apply(ParDo.of(new LatencyLoggingFunction()));
+        sqlQueryPCollection.apply(Combine.globally(new LatencyCombineFn()).withoutDefaults())
+                .apply(ParDo.of(new LatencyLoggingFunction()));
 
         sqlQueryJob.outputs().forEach(sqlQueryPCollection::apply);
         return beamRelNode;
@@ -322,6 +335,8 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
         final UnboundedSource<T, @NonNullType ? extends UnboundedSource.CheckpointMark> source;
         final Schema schema;
         final Map<String, PTransform<PCollection<T>, PCollection<Row>>> tableMapping;
+        final Map<String, PTransform<PCollection<T>, PCollection<T>>> additionalTransforms;
+
 
         public void applyTransforms(Pipeline pipeline,
                                     SqlQueryJob sqlQueryJob,
@@ -332,14 +347,22 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
                     new SourceWrapper<>(source) :
                     new SourceWrapper<>(source, true, checkpointString.toByteArray());
 
-            PCollection<T> readFromSource = pipeline.apply(Read.from(sourceWrapper))
-                    .apply(Window.into(sqlQueryJob.windowFunction()));
+            PCollection<T> readFromSource = pipeline.apply(Read.from(sourceWrapper));
+            for (var entry : additionalTransforms.entrySet()) {
+                readFromSource = readFromSource.apply(entry.getValue());
+            }
+            readFromSource = readFromSource.apply(Window.into(sqlQueryJob.windowFunction()));
+
+                    //.setRowSchema(schema)
+                    //.apply(Window.into(sqlQueryJob.windowFunction()));
 
             for (var entry : tableMapping.entrySet()) {
                 PCollection<Row> rows = readFromSource.apply(entry.getValue());
                 Schema withReceiveTime = Schema.builder()
                         .addFields(rows.getSchema().getFields()).addDateTimeField("receiveTime").build();
-                rows = rows.apply(MapElements.via(new AddCurrentTimeToRow(withReceiveTime)))
+                rows = rows
+                        .setRowSchema(withReceiveTime)
+                        .apply(MapElements.via(new AddCurrentTimeToRow()))
                         .setRowSchema(withReceiveTime);
                 tagged.put(entry.getKey(), rows);
             }
@@ -347,10 +370,12 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
 
         SourceWithSchema(UnboundedSource<T, @NonNullType ? extends UnboundedSource.CheckpointMark> source,
                          Schema schema,
-                         Map<String, PTransform<PCollection<T>, PCollection<Row>>> tableMapping) {
+                         Map<String, PTransform<PCollection<T>, PCollection<Row>>> tableMapping,
+                         Map<String, PTransform<PCollection<T>, PCollection<T>>> additionalTransforms) {
             this.source = source;
             this.schema = schema;
             this.tableMapping = tableMapping;
+            this.additionalTransforms = additionalTransforms;
         }
     }
 
@@ -391,7 +416,7 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
             }
             if (input.getSchema().getFieldNames().contains("dateTime1")) {
 //                LOG.info("window max timestamp " + window.maxTimestamp());
-                LOG.info("element " + input.toString(true));
+                LOG.info("element " + input);
             }
             context.output(input);
         }

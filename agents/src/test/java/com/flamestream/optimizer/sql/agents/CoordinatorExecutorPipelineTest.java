@@ -2,7 +2,6 @@ package com.flamestream.optimizer.sql.agents;
 
 import com.flamestream.optimizer.sql.agents.impl.CostEstimatorImpl;
 import com.flamestream.optimizer.sql.agents.testutils.TestSource;
-import com.flamestream.optimizer.testutils.TestUnboundedRowSource;
 import org.apache.beam.sdk.nexmark.NexmarkOptions;
 import org.apache.beam.sdk.nexmark.model.Event;
 import org.apache.beam.sdk.options.PipelineOptions;
@@ -36,46 +35,32 @@ public class CoordinatorExecutorPipelineTest {
     public void testCoordinatorExecutorRunNexmark() {
         final UserSource<Event> source = new UserSource<>(
                 TestSource.getTestSource(),
-                TestUnboundedRowSource.SCHEMA,
-                TestSource.getTestMappingMap());
-        final Coordinator.SqlQueryJob job = new Coordinator.SqlQueryJob() {
-            @Override
-            public String query() {
-                return ""
-                        + " SELECT "
+                TestSource.SCHEMA,
+                TestSource.getTestMappingMap(),
+                TestSource.getTestAdditionalTransforms()
+        );
+        final Coordinator.SqlQueryJob plan1 = new TestSqlJob(
+                " SELECT "
                         + "    *   "
-                        /*+ " FROM   "
+                        + " FROM   "
                         + "    Auction A INNER JOIN Person P on A.seller = P.id "
-                        + "       INNER JOIN Bid B on B.bidder = P.id" +*/
+                        + "       INNER JOIN Bid B on B.bidder = P.id",
+                10
+        );
+        final Coordinator.SqlQueryJob plan2 = new TestSqlJob(
+                " SELECT "
+                        + "    *   "
                         + " FROM   "
                         + "    Bid B INNER JOIN Person P on B.bidder = P.id "
-                        + "    INNER JOIN Auction A on A.seller = P.id " +
-                        "";
-            }
-
-            @Override
-            public WindowFn<Object, ? extends BoundedWindow> windowFunction() {
-                return FixedWindows.of(Duration.standardSeconds(10));
-            }
-
-            @Override
-            public Stream<PTransform<PCollection<Row>, PDone>> outputs() {
-                return Stream.of(PTransform.compose(
-                        (PCollection<Row> rows) -> {
-                            PCollection<String> strings = rows.apply(ParDo.of(new RowToStringFunction()));
-//                                    .apply(ParDo.of(new LoggingFunction()));
-                            return PDone.in(strings.getPipeline());
-//                            return PDone.in(rows.getPipeline());
-                        }));
-            }
-        };
+                        + "    INNER JOIN Auction A on A.seller = P.id ", 10
+        );
 
         // should probably be configured some other way but this was the easiest
-        final String argsString = "--runner=FlinkRunner --streaming=true --manageResources=false --monitorJobs=true --flinkMaster=localhost:8081 --tempLocation=" + folder.getRoot().getAbsolutePath();
+        final String argsString = "--runner=FlinkRunner --streaming=true --manageResources=false --monitorJobs=true --flinkMaster=localhost:8082 --tempLocation=" + folder.getRoot().getAbsolutePath();
 //        final String argsString = "--runner=FlinkRunner --streaming=true --manageResources=false --monitorJobs=true --flinkMaster=[local] --tempLocation=" + folder.getRoot().getAbsolutePath();
         final String[] args = argsString.split(" ");
         final PipelineOptions options = PipelineOptionsFactory.fromArgs(args).withValidation().as(NexmarkOptions.class);
-        CoordinatorExecutorPipeline.fromUserQuery(new CostEstimatorImpl(), List.of(source), job, argsString);
+        CoordinatorExecutorPipeline.fromSqlQueryJob(new CostEstimatorImpl(), List.of(source), argsString, plan2, plan1);
     }
 
     public static class LoggingFunction extends DoFn<String, String> {
@@ -110,6 +95,36 @@ public class CoordinatorExecutorPipelineTest {
 
         private <T> String stringOrEmpty(T value) {
             return value == null ? "" : value.toString();
+        }
+    }
+
+    private static class TestSqlJob implements Coordinator.SqlQueryJob {
+        private final String query;
+        private final int window;
+
+        TestSqlJob(final String query, final int window) {
+            this.query = query;
+            this.window = window;
+        }
+
+        @Override
+        public String query() {
+            return query;
+        }
+
+        @Override
+        public Stream<PTransform<PCollection<Row>, PDone>> outputs() {
+            return Stream.of(PTransform.compose(
+                    (PCollection<Row> rows) -> {
+                        PCollection<String> strings = rows.apply(ParDo.of(new RowToStringFunction()));
+//                                    .apply(ParDo.of(new LoggingFunction()));
+                        return PDone.in(strings.getPipeline());
+//                            return PDone.in(rows.getPipeline());
+                    }));        }
+
+        @Override
+        public WindowFn<Object, ? extends BoundedWindow> windowFunction() {
+            return FixedWindows.of(Duration.standardSeconds(window));
         }
     }
 }

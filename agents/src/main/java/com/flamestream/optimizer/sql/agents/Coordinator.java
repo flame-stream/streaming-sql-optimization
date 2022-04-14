@@ -6,15 +6,12 @@ import org.apache.beam.sdk.transforms.Combine;
 import org.apache.beam.sdk.transforms.PTransform;
 import org.apache.beam.sdk.transforms.SerializableFunction;
 import org.apache.beam.sdk.transforms.windowing.BoundedWindow;
-import org.apache.beam.sdk.transforms.windowing.IntervalWindow;
-import org.apache.beam.sdk.transforms.windowing.PartitioningWindowFn;
 import org.apache.beam.sdk.transforms.windowing.WindowFn;
 import org.apache.beam.sdk.values.*;
 import org.checkerframework.checker.nullness.compatqual.NonNullType;
 
 import java.util.Map;
 import java.util.function.Consumer;
-import java.util.function.Function;
 import java.util.stream.Stream;
 
 /**
@@ -25,11 +22,13 @@ public interface Coordinator {
     <T> void registerInput(
             UnboundedSource<T, @NonNullType ? extends UnboundedSource.CheckpointMark> source,
             Schema sourceSchema,
-            Map<String, PTransform<PCollection<T>, PCollection<Row>>> tableMapping
-    );
+            Map<String, PTransform<PCollection<T>, PCollection<Row>>> tableMapping,
+            Map<String, PTransform<PCollection<T>, PCollection<T>>> additionalTransforms);
     Stream<UnboundedSource<?, @NonNullType ? extends UnboundedSource.CheckpointMark>> inputs();
 
     RunningSqlQueryJob start(SqlQueryJob sqlQueryJob);
+    // TODO should be changed later into something better
+    RunningSqlQueryJob startAndReplaceLater(SqlQueryJob sqlQueryJob, SqlQueryJob newSqlQueryJob);
     void stop(RunningSqlQueryJob runningSqlQueryJob);
     Stream<? extends RunningSqlQueryJob> runningJobs();
 

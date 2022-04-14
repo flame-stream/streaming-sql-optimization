@@ -1,5 +1,6 @@
 package com.flamestream.optimizer.testutils;
 
+import com.flamestream.optimizer.sql.agents.testutils.TestSource;
 import org.apache.beam.sdk.coders.Coder;
 import org.apache.beam.sdk.io.UnboundedSource;
 import org.apache.beam.sdk.nexmark.NexmarkConfiguration;
@@ -11,7 +12,6 @@ import org.apache.beam.sdk.nexmark.sources.UnboundedEventSource;
 import org.apache.beam.sdk.nexmark.sources.generator.GeneratorCheckpoint;
 import org.apache.beam.sdk.nexmark.sources.generator.GeneratorConfig;
 import org.apache.beam.sdk.options.PipelineOptions;
-import org.apache.beam.sdk.schemas.Schema;
 import org.apache.beam.sdk.schemas.SchemaCoder;
 import org.apache.beam.sdk.values.Row;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -26,41 +26,6 @@ import java.util.NoSuchElementException;
 
 public class TestUnboundedRowSource extends UnboundedSource<Row, GeneratorCheckpoint> {
     public static final Logger LOG = LoggerFactory.getLogger(TestUnboundedRowSource.class);
-
-    public static final Schema PERSON_SCHEMA = Schema.builder()
-            .addField("id", Schema.FieldType.INT64)
-            .addField("name", Schema.FieldType.STRING)
-            .addField("emailAddress", Schema.FieldType.STRING)
-            .addField("creditCard", Schema.FieldType.STRING)
-            .addField("city", Schema.FieldType.STRING)
-            .addField("state", Schema.FieldType.STRING)
-            .addField("dateTime", Schema.FieldType.DATETIME)
-            .addField("extra", Schema.FieldType.STRING)
-            .build();
-    public static final Schema AUCTION_SCHEMA = Schema.builder()
-            .addField("id", Schema.FieldType.INT64)
-            .addField("itemName", Schema.FieldType.STRING)
-            .addField("description", Schema.FieldType.STRING)
-            .addField("initialBid", Schema.FieldType.INT64)
-            .addField("reserve", Schema.FieldType.INT64)
-            .addField("dateTime", Schema.FieldType.DATETIME)
-            .addField("expires", Schema.FieldType.DATETIME)
-            .addField("seller", Schema.FieldType.INT64)
-            .addField("category", Schema.FieldType.INT64)
-            .addField("extra", Schema.FieldType.STRING)
-            .build();
-    public static final Schema BID_SCHEMA = Schema.builder()
-            .addField("auction", Schema.FieldType.INT64)
-            .addField("bidder", Schema.FieldType.INT64)
-            .addField("price", Schema.FieldType.INT64)
-            .addField("dateTime", Schema.FieldType.DATETIME)
-            .addField("extra", Schema.FieldType.STRING)
-            .build();
-    public static final Schema SCHEMA = Schema.builder()
-            .addField("newPerson", Schema.FieldType.row(PERSON_SCHEMA).withNullable(true))
-            .addField("newAuction", Schema.FieldType.row(AUCTION_SCHEMA).withNullable(true))
-            .addField("bid", Schema.FieldType.row(BID_SCHEMA).withNullable(true))
-            .build();
 
 
     private final UnboundedEventSource source;
@@ -107,7 +72,7 @@ public class TestUnboundedRowSource extends UnboundedSource<Row, GeneratorCheckp
 
     @Override
     public Coder<Row> getOutputCoder() {
-        return SchemaCoder.of(SCHEMA);
+        return SchemaCoder.of(TestSource.SCHEMA);
     }
 
     private class RowReader extends UnboundedReader<Row> {
@@ -136,7 +101,7 @@ public class TestUnboundedRowSource extends UnboundedSource<Row, GeneratorCheckp
             final Row res;
             if (currentEvent.newPerson != null) {
                 final Person person = currentEvent.newPerson;
-                final Row personRow = Row.withSchema(PERSON_SCHEMA).addValues(
+                final Row personRow = Row.withSchema(TestSource.PERSON_SCHEMA).addValues(
                         person.id,
                         person.name,
                         person.emailAddress,
@@ -146,10 +111,10 @@ public class TestUnboundedRowSource extends UnboundedSource<Row, GeneratorCheckp
                         person.dateTime,
                         person.extra
                 ).build();
-                res = Row.withSchema(SCHEMA).withFieldValue("newPerson", personRow).build();
+                res = Row.withSchema(TestSource.SCHEMA).withFieldValue("newPerson", personRow).build();
             } else if (currentEvent.newAuction != null) {
                 final Auction auction = currentEvent.newAuction;
-                final Row auctionRow = Row.withSchema(AUCTION_SCHEMA).addValues(
+                final Row auctionRow = Row.withSchema(TestSource.AUCTION_SCHEMA).addValues(
                         auction.id,
                         auction.itemName,
                         auction.description,
@@ -161,17 +126,17 @@ public class TestUnboundedRowSource extends UnboundedSource<Row, GeneratorCheckp
                         auction.category,
                         auction.extra
                 ).build();
-                res = Row.withSchema(SCHEMA).withFieldValue("newAuction", auctionRow).build();
+                res = Row.withSchema(TestSource.SCHEMA).withFieldValue("newAuction", auctionRow).build();
             } else if (currentEvent.bid != null) {
                 final Bid bid = currentEvent.bid;
-                final Row bidRow = Row.withSchema(BID_SCHEMA).addValues(
+                final Row bidRow = Row.withSchema(TestSource.BID_SCHEMA).addValues(
                         bid.auction,
                         bid.bidder,
                         bid.price,
                         bid.dateTime,
                         bid.extra
                 ).build();
-                res = Row.withSchema(SCHEMA).withFieldValue("bid", bidRow).build();
+                res = Row.withSchema(TestSource.SCHEMA).withFieldValue("bid", bidRow).build();
             } else {
                 res = null;
             }

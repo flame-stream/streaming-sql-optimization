@@ -226,14 +226,14 @@ public class Generator implements Iterator<TimestampedValue<Event>>, Serializabl
         Random random = new Random(getNextEventId());
 
         long newEventId = getNextEventId();
-        long rem = newEventId % GeneratorConfig.PROPORTION_DENOMINATOR;
+        long rem = newEventId % config.proportionDenominator;
 
         Event event;
-        if (rem < GeneratorConfig.PERSON_PROPORTION) {
+        if (rem < config.personProportion) {
 //            LOG.info("generated [PERSON ] " + new DateTime(adjustedEventTimestamp));
             event =
                     new Event(nextPerson(newEventId, random, new DateTime(adjustedEventTimestamp), config));
-        } else if (rem < GeneratorConfig.PERSON_PROPORTION + GeneratorConfig.AUCTION_PROPORTION) {
+        } else if (rem < config.personProportion + config.auctionProportion) {
 //            LOG.info("generated [AUCTION] " + new DateTime(adjustedEventTimestamp));
             event =
                     new Event(
