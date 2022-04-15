@@ -8,12 +8,14 @@ import com.google.protobuf.Empty;
 import io.grpc.*;
 import io.grpc.stub.StreamObserver;
 import org.apache.beam.runners.flink.FlinkRunner;
+import org.apache.beam.runners.flink.FlinkDetachedRunnerResultWithJobClient;
 import org.apache.beam.sdk.Pipeline;
 import org.apache.beam.sdk.PipelineResult;
 import org.apache.beam.sdk.PipelineRunner;
 import org.apache.beam.sdk.nexmark.NexmarkOptions;
 import org.apache.beam.sdk.options.PipelineOptions;
 import org.apache.beam.sdk.options.PipelineOptionsFactory;
+import org.apache.flink.core.execution.JobClient;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.joda.time.Instant;
 import org.slf4j.Logger;
@@ -47,6 +49,8 @@ public class ExecutorImpl implements Executor, Serializable, AutoCloseable {
     private final List<SourceCommunicator> newSources;
 
     private final AddressesServer addressesServer;
+
+    private JobClient client = null;
 
     public ExecutorImpl(final String optionsArguments) {
         this.optionsArguments = optionsArguments;
@@ -137,12 +141,19 @@ public class ExecutorImpl implements Executor, Serializable, AutoCloseable {
             for (SourceCommunicator source : currentSources) {
                 source.resumeTo(maxWatermark);
             }
+
+            if (client != null) {
+                client.cancel();
+            }
         }
         else {
             currentPipeline = pipeline;
             pipeline.getOptions().setJobName("old_graph");
             LOG.info(pipeline.getOptions().getJobName());
-            oldRunner.run(pipeline);
+            PipelineResult result = oldRunner.run(pipeline);
+            if (result instanceof FlinkDetachedRunnerResultWithJobClient) {
+                client = ((FlinkDetachedRunnerResultWithJobClient) result).getJobClient();
+            }
         }
     }
 

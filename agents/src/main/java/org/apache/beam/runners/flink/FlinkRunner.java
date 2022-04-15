@@ -37,6 +37,7 @@ import org.apache.beam.sdk.transforms.View;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.annotations.VisibleForTesting;
 import org.apache.flink.api.common.JobExecutionResult;
 import org.apache.flink.runtime.jobgraph.JobGraph;
+import org.apache.flink.streaming.api.environment.JobExecutionResultWithClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -86,12 +87,12 @@ public class FlinkRunner extends PipelineRunner<PipelineResult> {
                     "For maximum performance you should set the 'fasterCopy' option. See more at https://issues.apache.org/jira/browse/BEAM-11146");
         }
 
-        FlinkPipelineExecutionEnvironment env = new FlinkPipelineExecutionEnvironment(options);
+        FlinkDetachedPipelineExecutionEnvironment env = new FlinkDetachedPipelineExecutionEnvironment(options);
 
         LOG.info("Translating pipeline to Flink program.");
         env.translate(pipeline);
 
-        JobExecutionResult result;
+        JobExecutionResultWithClient result;
         try {
             LOG.info("Starting execution of Flink program.");
             result = env.executePipeline();
@@ -102,18 +103,19 @@ public class FlinkRunner extends PipelineRunner<PipelineResult> {
         return createPipelineResult(result, options);
     }
 
-    static PipelineResult createPipelineResult(JobExecutionResult result, PipelineOptions options) {
+    static PipelineResult createPipelineResult(JobExecutionResultWithClient resultWithClient, PipelineOptions options) {
         // The package of DetachedJobExecutionResult has been changed in 1.10.
         // Refer to https://github.com/apache/flink/commit/c36b35e6876ecdc717dade653e8554f9d8b543c9 for
         // more details.
-        String resultClassName = result.getClass().getCanonicalName();
+        String resultClassName = resultWithClient.getJobExecutionResult().getClass().getCanonicalName();
         if (resultClassName.equals(
                 "org.apache.flink.client.program.DetachedEnvironment.DetachedJobExecutionResult")
                 || resultClassName.equals("org.apache.flink.core.execution.DetachedJobExecutionResult")) {
             LOG.info("Pipeline submitted in Detached mode");
             // no metricsPusher because metrics are not supported in detached mode
-            return new FlinkDetachedRunnerResult();
+            return new FlinkDetachedRunnerResultWithJobClient(resultWithClient.getJobClient());
         } else {
+            JobExecutionResult result = resultWithClient.getJobExecutionResult();
             LOG.info("Execution finished in {} msecs", result.getNetRuntime());
             Map<String, Object> accumulators = result.getAllAccumulatorResults();
             if (accumulators != null && !accumulators.isEmpty()) {
@@ -190,7 +192,7 @@ public class FlinkRunner extends PipelineRunner<PipelineResult> {
 
     @VisibleForTesting
     JobGraph getJobGraph(Pipeline p) {
-        FlinkPipelineExecutionEnvironment env = new FlinkPipelineExecutionEnvironment(options);
+        FlinkDetachedPipelineExecutionEnvironment env = new FlinkDetachedPipelineExecutionEnvironment(options);
         return env.getJobGraph(p);
     }
 }

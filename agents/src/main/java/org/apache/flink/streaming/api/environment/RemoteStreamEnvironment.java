@@ -19,13 +19,8 @@ package org.apache.flink.streaming.api.environment;
 
 import org.apache.flink.annotation.Public;
 import org.apache.flink.annotation.PublicEvolving;
-import org.apache.flink.api.common.JobExecutionResult;
 import org.apache.flink.api.java.RemoteEnvironmentConfigUtils;
-import org.apache.flink.configuration.ConfigUtils;
-import org.apache.flink.configuration.Configuration;
-import org.apache.flink.configuration.DeploymentOptions;
-import org.apache.flink.configuration.JobManagerOptions;
-import org.apache.flink.configuration.PipelineOptions;
+import org.apache.flink.configuration.*;
 import org.apache.flink.core.execution.DefaultExecutorServiceLoader;
 import org.apache.flink.core.execution.PipelineExecutorServiceLoader;
 import org.apache.flink.runtime.jobgraph.SavepointRestoreSettings;
@@ -213,7 +208,7 @@ public class RemoteStreamEnvironment extends StreamExecutionEnvironment {
     }
 
     @Override
-    public JobExecutionResult execute(StreamGraph streamGraph) throws Exception {
+    public JobExecutionResultWithClient execute(StreamGraph streamGraph) throws Exception {
         return super.execute(streamGraph);
     }
 

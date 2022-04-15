@@ -24,9 +24,9 @@ import org.apache.beam.runners.core.construction.resources.PipelineResources;
 import org.apache.beam.sdk.Pipeline;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.annotations.VisibleForTesting;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.MoreObjects;
-import org.apache.flink.api.common.JobExecutionResult;
 import org.apache.flink.api.java.ExecutionEnvironment;
 import org.apache.flink.runtime.jobgraph.JobGraph;
+import org.apache.flink.streaming.api.environment.JobExecutionResultWithClient;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -42,10 +42,10 @@ import org.slf4j.LoggerFactory;
 @SuppressWarnings({
         "nullness" // TODO(https://issues.apache.org/jira/browse/BEAM-10402)
 })
-class FlinkPipelineExecutionEnvironment {
+class FlinkDetachedPipelineExecutionEnvironment {
 
     private static final Logger LOG =
-            LoggerFactory.getLogger(FlinkPipelineExecutionEnvironment.class);
+            LoggerFactory.getLogger(FlinkDetachedPipelineExecutionEnvironment.class);
 
     private final FlinkPipelineOptions options;
 
@@ -66,12 +66,12 @@ class FlinkPipelineExecutionEnvironment {
     private StreamExecutionEnvironment flinkStreamEnv;
 
     /**
-     * Creates a {@link FlinkPipelineExecutionEnvironment} with the user-specified parameters in the
+     * Creates a {@link FlinkDetachedPipelineExecutionEnvironment} with the user-specified parameters in the
      * provided {@link FlinkPipelineOptions}.
      *
      * @param options the user-defined pipeline options.
      */
-    FlinkPipelineExecutionEnvironment(FlinkPipelineOptions options) {
+    FlinkDetachedPipelineExecutionEnvironment(FlinkPipelineOptions options) {
         this.options = checkNotNull(options);
     }
 
@@ -146,11 +146,11 @@ class FlinkPipelineExecutionEnvironment {
     }
 
     /** Launches the program execution. */
-    public JobExecutionResult executePipeline() throws Exception {
+    public JobExecutionResultWithClient executePipeline() throws Exception {
         final String jobName = options.getJobName();
 
         if (flinkBatchEnv != null) {
-            return flinkBatchEnv.execute(jobName);
+            return new JobExecutionResultWithClient(flinkBatchEnv.execute(jobName), null);
         } else if (flinkStreamEnv != null) {
             return flinkStreamEnv.execute(jobName);
         } else {
