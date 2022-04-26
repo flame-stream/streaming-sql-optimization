@@ -32,7 +32,8 @@ public class CostEstimatorImpl implements CostEstimator {
         RelMetadataQuery.THREAD_PROVIDERS.set(JaninoRelMetadataProvider.of(rel.getCluster().getMetadataProvider()));
         rel.getCluster().invalidateMetadataQuery();
         try {
-            return rel.getCluster().getPlanner().getCost(rel, rel.getCluster().getMetadataQuery());
+            final RelOptCost cost = rel.getCluster().getPlanner().getCost(rel, rel.getCluster().getMetadataQuery());
+            return cost;
         } catch (Exception e) {
             System.out.println(e.getMessage());
             return null;

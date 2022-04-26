@@ -28,6 +28,7 @@ import org.apache.beam.sdk.extensions.sql.impl.schema.BeamPCollectionTable;
 import org.apache.beam.sdk.extensions.sql.meta.provider.ReadOnlyTableProvider;
 import org.apache.beam.sdk.io.Read;
 import org.apache.beam.sdk.io.UnboundedSource;
+import org.apache.beam.sdk.nexmark.sources.UnboundedEventSource;
 import org.apache.beam.sdk.options.PipelineOptions;
 import org.apache.beam.sdk.schemas.Schema;
 import org.apache.beam.sdk.transforms.*;
@@ -35,6 +36,7 @@ import org.apache.beam.sdk.transforms.windowing.BoundedWindow;
 import org.apache.beam.sdk.transforms.windowing.Window;
 import org.apache.beam.sdk.values.*;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.plan.RelOptCost;
+import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rel.externalize.RelJsonWriter;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rel.metadata.RelMetadataProvider;
 import org.checkerframework.checker.nullness.compatqual.NonNullType;
 import org.slf4j.Logger;
@@ -42,7 +44,10 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -62,8 +67,10 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
     private BeamRelNode currentGraph = null;
     private ByteString checkpointMarkString = null;
 
-    private SqlQueryJob newJob = null;
+    private Map<String, ?> parametersMap = new HashMap<>();
+
     private int windowCounter = 0;
+    private Map<String, Integer> targetWindowCount = new HashMap<>();
 
     @Override
     public void close() throws Exception {
@@ -104,26 +111,24 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
                     @Override
                     public void onNext(Services.Stats value) {
                         final var relNode = runningJobs.get(0).beamRelNode;
+                        final Map<String, ?> currentParametersMap = value.getCardinalityMap().entrySet().stream().collect(Collectors.toMap(
+                                entry -> "table_column_distinct_row_count:" + entry.getKey().toLowerCase(),
+                                Map.Entry::getValue
+                        ));
+
                         final RelOptCost cost = estimator.getCumulativeCost(
                                 relNode,
-                                value.getCardinalityMap().entrySet().stream().collect(Collectors.toMap(
-                                        entry -> "table_column_distinct_row_count:" + entry.getKey().toLowerCase(),
-                                        Map.Entry::getValue
-                                ))
+                                parametersMap
                         );
                         LOG.info("cost " + cost.toString());
-                        windowCounter++;
-                        if (windowCounter == 20) {
-                            if (newJob != null) {
-                                LOG.info("switching plans");
-                                tryNewGraph(newJob);
-                            } else {
-                                tryNewGraph(runningJobs.get(0).sqlQueryJob);
-                            }
-                        }
-                        /*if (ExecutorImpl.HACKY_VARIABLE <= 1) {
 
-                        }*/
+                        if (parametersMap.isEmpty()) {
+                            parametersMap = currentParametersMap;
+                        } else if (currentParametersMap.entrySet().stream().anyMatch((entry -> entry.getValue() instanceof Double && Math.abs((Double)entry.getValue() - (Double)parametersMap.get(entry.getKey())) > 300))) {
+                            parametersMap = currentParametersMap;
+                            final QueryPlanner.QueryParameters parameters = QueryPlanner.QueryParameters.ofNamed(parametersMap);
+                            tryNewGraph(0, parameters);
+                        }
                     }
 
                     @Override
@@ -200,12 +205,6 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
     }
 
     @Override
-    public RunningSqlQueryJob startAndReplaceLater(SqlQueryJob sqlQueryJob, SqlQueryJob newSqlQueryJob) {
-        newJob = newSqlQueryJob;
-        return start(sqlQueryJob);
-    }
-
-    @Override
     public void stop(RunningSqlQueryJob runningSqlQueryJob) {
         // TODO: 7/17/21 implement me
     }
@@ -215,7 +214,12 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
         return runningJobs.stream();
     }
 
-    private void tryNewGraph(SqlQueryJob sqlQueryJob) {
+    private void tryNewGraph(int runningJobIndex) {
+        tryNewGraph(runningJobIndex, QueryPlanner.QueryParameters.ofNone());
+    }
+
+    private boolean tryNewGraph(int runningJobIndex,
+                                QueryPlanner.QueryParameters queryParameters) {
         // here we need to give list of providers to newSqlTransform method
         /*SqlTransform newSqlTransform =
                 updateSqlTransform(sqlQueryJob.query(), ImmutableList.of());
@@ -223,14 +227,27 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
         if (newSqlTransform != null) {
 
         }*/
+        final SqlQueryJob sqlQueryJob = runningJobs.get(runningJobIndex).sqlQueryJob;
+
         final var pipeline = Pipeline.create();
-        createPipeline(pipeline, sqlQueryJob, QueryPlanner.QueryParameters.ofNone());
-        try {
-            LOG.info("trying a new graph");
-            executor.startOrUpdate(pipeline, null);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
+        final BeamRelNode relNode = createPipeline(pipeline, sqlQueryJob, queryParameters);
+        final RelOptCost newCost = estimator.getCumulativeCost(relNode, parametersMap);
+        final RelOptCost currentCost = estimator.getCumulativeCost(runningJobs.get(0).beamRelNode, parametersMap);
+        LOG.info("new cost " + newCost + " old cost " + currentCost);
+        if (newCost.isLt(currentCost)) {
+            try {
+                LOG.info("trying a new graph");
+                executor.startOrUpdate(pipeline, null);
+
+                runningJobs.remove(runningJobIndex);
+                runningJobs.add(runningJobIndex, new Running(sqlQueryJob, relNode));
+
+                return true;
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
         }
+        return false;
     }
 
     private boolean isDifferenceProfitable(RelOptCost newGraphCost, RelOptCost oldGraphCost) {
@@ -277,7 +294,7 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
             withTags = withTags.and(inputStreams.getKey(), inputStreams.getValue());
         }
 
-        var beamRelNode = BeamSqlEnv.builder(new ReadOnlyTableProvider(
+        var env = BeamSqlEnv.builder(new ReadOnlyTableProvider(
                         "TestPCollection",
                         withTags.expand().entrySet().stream().collect(Collectors.toMap(
                                 table -> table.getKey().getId(),
@@ -286,9 +303,12 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
                 ))
                 .setQueryPlannerClassName(ModifiedCalciteQueryPlanner.class.getName())
                 .setPipelineOptions(new TestPipelineOptions())
-                .build().parseQuery(sqlQueryJob.query(), queryParameters);
+                .build();
+        var beamRelNode = env.parseQuery(sqlQueryJob.query(), queryParameters);
 
         var fieldsOfInterest = new SqlQueryInspector().inspectQuery(beamRelNode);
+
+        fieldsOfInterest.values().forEach(it -> it.forEach(LOG::info));
 
         final var stats = fieldsOfInterest.entrySet().stream().flatMap(interest ->
                 interest.getKey() instanceof BeamIOSourceRel
@@ -353,8 +373,8 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
             }
             readFromSource = readFromSource.apply(Window.into(sqlQueryJob.windowFunction()));
 
-                    //.setRowSchema(schema)
-                    //.apply(Window.into(sqlQueryJob.windowFunction()));
+            //.setRowSchema(schema)
+            //.apply(Window.into(sqlQueryJob.windowFunction()));
 
             for (var entry : tableMapping.entrySet()) {
                 PCollection<Row> rows = readFromSource.apply(entry.getValue());

@@ -27,8 +27,6 @@ public interface Coordinator {
     Stream<UnboundedSource<?, @NonNullType ? extends UnboundedSource.CheckpointMark>> inputs();
 
     RunningSqlQueryJob start(SqlQueryJob sqlQueryJob);
-    // TODO should be changed later into something better
-    RunningSqlQueryJob startAndReplaceLater(SqlQueryJob sqlQueryJob, SqlQueryJob newSqlQueryJob);
     void stop(RunningSqlQueryJob runningSqlQueryJob);
     Stream<? extends RunningSqlQueryJob> runningJobs();
 

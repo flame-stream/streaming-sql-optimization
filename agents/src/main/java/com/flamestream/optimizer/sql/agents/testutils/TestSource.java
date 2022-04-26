@@ -108,7 +108,7 @@ public class TestSource {
 
     public static UnboundedEventSource getTestSource() {
         final NexmarkConfiguration config = NexmarkConfiguration.DEFAULT;
-        config.numEvents = 1000000;
+        config.numEvents = 600000;
         config.isRateLimited = true;
         config.streamTimeout = 15 * 60;
 //        config.useWallclockEventTime = true;

@@ -24,12 +24,12 @@ import java.net.SocketException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
 public class StatisticsHandling {
     private static final Metadata.Key<String> TARGET_KEY = Metadata.Key.of("target", Metadata.ASCII_STRING_MARSHALLER);
-    public static final int STATS_PORT = 9004;
 
     private static final Logger LOG = LoggerFactory.getLogger("optimizer.statistics");
 
@@ -37,7 +37,7 @@ public class StatisticsHandling {
         private final String column;
         @StateId("void")
         private final StateSpec<ValueState<Void>> ignored = StateSpecs.value();
-        private BoundedWindow boundedWindow;
+        private BoundedWindow boundedWindow = null;
         private int i = 0;
 
         public LocalCardinalityDoFn(String column) {
@@ -46,8 +46,10 @@ public class StatisticsHandling {
 
         @ProcessElement
         public void processElement(ProcessContext c, BoundedWindow window) {
+            LOG.info("element of stats processing " + c.element());
         }
 
+        // TODO why here? what is this meant to accomplish?
         @OnWindowExpiration
         public void onWindowExpiration(BoundedWindow boundedWindow) {
             this.boundedWindow = boundedWindow;
@@ -59,6 +61,7 @@ public class StatisticsHandling {
             if (finishBundleContext == null || boundedWindow == null) {
                 return;
             }
+            LOG.info("stats for pipeline " + finishBundleContext.getPipelineOptions().getJobName() + " column " + column + " value " + i);
             finishBundleContext.output(KV.of(column, (double) i), boundedWindow.maxTimestamp(), boundedWindow);
             i = 0;
             boundedWindow = null;
@@ -81,12 +84,15 @@ public class StatisticsHandling {
 
         @Setup
         public void setup() throws IOException {
-            userAgent = NetworkUtil.getLocalAddressHost(executorAddress) + ":" + STATS_PORT;
+            final int statsPort = ThreadLocalRandom.current().nextInt(9000, 10000);
+            LOG.info("new stats port " + statsPort);
+            userAgent = NetworkUtil.getLocalAddressHost(executorAddress) + ":" + statsPort;
             statsSender = new StatsSender(executorAddress, userAgent);
         }
 
         @ProcessElement
         public void processElement(ProcessContext c, BoundedWindow window) {
+            LOG.info("user agent " + userAgent);
             if (
                     pendingCardinality.computeIfAbsent(window.maxTimestamp(), __ -> new HashMap<>())
                             .putIfAbsent(c.element().getKey(), c.element().getValue()) != null
@@ -203,8 +209,6 @@ public class StatisticsHandling {
                                 @Override
                                 public void start(Listener<RespT> responseListener, Metadata headers) {
                                     headers.put(TARGET_KEY, target);
-//                                    headers.put(WORKER_KEY, String.join(" ", sourceAddresses));
-//                                    LOG.info("source addresses as known to client: " + String.join(" ", sourceAddresses));
                                     super.start(responseListener, headers);
                                 }
                             };

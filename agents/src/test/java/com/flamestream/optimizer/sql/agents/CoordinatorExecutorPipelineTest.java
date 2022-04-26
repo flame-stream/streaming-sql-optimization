@@ -60,7 +60,7 @@ public class CoordinatorExecutorPipelineTest {
 //        final String argsString = "--runner=FlinkRunner --streaming=true --manageResources=false --monitorJobs=true --flinkMaster=[local] --tempLocation=" + folder.getRoot().getAbsolutePath();
         final String[] args = argsString.split(" ");
         final PipelineOptions options = PipelineOptionsFactory.fromArgs(args).withValidation().as(NexmarkOptions.class);
-        CoordinatorExecutorPipeline.fromSqlQueryJob(new CostEstimatorImpl(), List.of(source), argsString, plan1, plan2);
+        CoordinatorExecutorPipeline.fromSqlQueryJob(new CostEstimatorImpl(), List.of(source), argsString, plan2);
     }
 
     public static class LoggingFunction extends DoFn<String, String> {
@@ -87,10 +87,11 @@ public class CoordinatorExecutorPipelineTest {
         public void processElement(@Element Row element, OutputReceiver<String> out) {
             final String id = stringOrEmpty(element.getValue("id")) + " " +
                     stringOrEmpty(element.getValue("id0"));
-            final String dateTime = stringOrEmpty(element.getValue("dateTime")) + " " +
+            /*final String dateTime = stringOrEmpty(element.getValue("dateTime")) + " " +
                     stringOrEmpty(element.getValue("dateTime0")) + " " +
-                    stringOrEmpty(element.getValue("dateTime1"));
-            out.output(id + " // " + dateTime);
+                    stringOrEmpty(element.getValue("dateTime1"));*/
+//            out.output(id + " // " + dateTime);
+            out.output(id);
         }
 
         private <T> String stringOrEmpty(T value) {

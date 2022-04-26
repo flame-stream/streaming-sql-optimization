@@ -218,8 +218,8 @@ public class NexmarkConfiguration implements Serializable {
 
     /** Proportions of people/auctions/bids to synthesize. */
     @JsonProperty public int PERSON_PROPORTION = 5;
-    @JsonProperty public int AUCTION_PROPORTION = 5;
-    @JsonProperty public int BID_PROPORTION = 90;
+    @JsonProperty public int AUCTION_PROPORTION = 90;
+    @JsonProperty public int BID_PROPORTION = 5;
 
     /** Flag to count persons, auctions, bids per window.  */
     @JsonProperty public boolean counting = false;

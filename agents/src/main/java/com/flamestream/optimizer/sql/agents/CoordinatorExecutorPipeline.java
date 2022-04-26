@@ -11,8 +11,7 @@ public class CoordinatorExecutorPipeline {
             final CostEstimator costEstimator,
             final @NonNull Collection<UserSource> inputs,
             final String optionsArguments,
-            final Coordinator.SqlQueryJob job,
-            final Coordinator.SqlQueryJob replacement) {
+            final Coordinator.SqlQueryJob job) {
 
         final Executor executor = new ExecutorImpl(optionsArguments);
         final Coordinator coordinator = new CoordinatorImpl(costEstimator, executor);
@@ -21,11 +20,7 @@ public class CoordinatorExecutorPipeline {
             coordinator.registerInput(input.getSource(), input.getSchema(), input.getTableMapping(),input.getAdditionalTransforms() );
         }
 
-        if (replacement != null) {
-            coordinator.startAndReplaceLater(job, replacement);
-        } else {
-            coordinator.start(job);
-        }
+        coordinator.start(job);
         try {
             Thread.sleep(1000 * 60 * 15);
         } catch (Exception e) { }

@@ -67,7 +67,7 @@ import java.util.stream.Stream;
         "nullness" // TODO(https://issues.apache.org/jira/browse/BEAM-10402)
 })
 public class ModifiedCalciteQueryPlanner implements QueryPlanner {
-    private static final Logger LOG = LoggerFactory.getLogger(ModifiedCalciteQueryPlanner.class);
+    private static final Logger LOG = LoggerFactory.getLogger("planner");
 
     private final Planner planner;
     private final JdbcConnection connection;
@@ -309,9 +309,13 @@ public class ModifiedCalciteQueryPlanner implements QueryPlanner {
                 final var inputRef = (RexInputRef) node;
                 final var leftFieldCount = rel.getLeft().getRowType().getFieldCount();
                 if (inputRef.getIndex() < leftFieldCount) {
-                    return mq.getDistinctRowCount(rel.getLeft(), ImmutableBitSet.of(inputRef.getIndex()), null);
+                    var res = mq.getDistinctRowCount(rel.getLeft(), ImmutableBitSet.of(inputRef.getIndex()), null);
+                    LOG.info("left selectivity " + res);
+                    return res;
                 } else {
-                    return mq.getDistinctRowCount(rel.getRight(), ImmutableBitSet.of(inputRef.getIndex() - leftFieldCount), null);
+                    var res = mq.getDistinctRowCount(rel.getRight(), ImmutableBitSet.of(inputRef.getIndex() - leftFieldCount), null);
+                    LOG.info("right selectivity " + res);
+                    return res;
                 }
             }
             return null;

@@ -35,7 +35,7 @@ public class LatencyCombineFn extends Combine.CombineFn<Row, LatencyCombineFn.Ac
             if (input != null) {
                 Instant timestamp1 = input.getValue("receiveTime");
                 Instant timestamp2 = input.getValue("receiveTime0");
-                Instant timestamp3 = input.getValue("receiveTime1");
+                Instant timestamp3 = input.getSchema().getFieldNames().contains("receiveTime00") ? input.getValue("receiveTime00") : input.getValue("receiveTime1");
                 Instant arrivalTime = Instant.now();
                 if (timestamp1 != null && timestamp1.getMillis() > timestamp.getMillis()) {
                     timestamp = timestamp1;

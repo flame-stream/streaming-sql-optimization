@@ -35,7 +35,7 @@ public class SourceWrapper<T, U extends UnboundedSource.CheckpointMark> extends 
 
     public static final Logger LOG = LoggerFactory.getLogger("optimizer.source");
 
-    private final int portNumber;
+    private int portNumber = -1;
 
     private final UnboundedSource<T, U> source;
 
@@ -54,13 +54,14 @@ public class SourceWrapper<T, U extends UnboundedSource.CheckpointMark> extends 
     public SourceWrapper(final UnboundedSource<T, U> source, boolean holdUntilResume, final byte[] mark) {
         this.source = source;
         this.holdUntilResume = holdUntilResume;
-        this.portNumber = ThreadLocalRandom.current().nextInt(9000, 65000);
         this.checkpointMarkSerialized = mark;
-        LOG.info("chose port number " + this.portNumber);
         LOG.info("hold until resume " + holdUntilResume);
     }
 
     public int getPortNumber() {
+        if (portNumber == -1) {
+            initializePortNumber();
+        }
         return portNumber;
     }
 
@@ -93,6 +94,11 @@ public class SourceWrapper<T, U extends UnboundedSource.CheckpointMark> extends 
         return source.getOutputCoder();
     }
 
+    private void initializePortNumber() {
+        this.portNumber = ThreadLocalRandom.current().nextInt(11000, 65000);
+        LOG.info("chose port number " + this.portNumber);
+    }
+
     private class ReaderWrapper extends UnboundedReader<T> {
         private final UnboundedReader<T> reader;
         private final WorkerServer workerServer;
@@ -102,6 +108,9 @@ public class SourceWrapper<T, U extends UnboundedSource.CheckpointMark> extends 
 
         private ReaderWrapper(final UnboundedReader<T> reader) throws IOException {
             this.reader = reader;
+            if (portNumber == -1) {
+                initializePortNumber();
+            }
             LOG.info("started worker server on source on port " + portNumber);
             workerServer = new WorkerServer(portNumber);
             checkpointsSender = new CheckpointsSender(new InetSocketAddress(20202), getPortNumber());

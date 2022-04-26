@@ -7,8 +7,8 @@ import com.flamestream.optimizer.sql.agents.WorkerServiceGrpc;
 import com.google.protobuf.Empty;
 import io.grpc.*;
 import io.grpc.stub.StreamObserver;
-import org.apache.beam.runners.flink.FlinkRunner;
 import org.apache.beam.runners.flink.FlinkDetachedRunnerResultWithJobClient;
+import org.apache.beam.runners.flink.FlinkRunner;
 import org.apache.beam.sdk.Pipeline;
 import org.apache.beam.sdk.PipelineResult;
 import org.apache.beam.sdk.PipelineRunner;
@@ -31,12 +31,9 @@ import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 public class ExecutorImpl implements Executor, Serializable, AutoCloseable {
-    // this vile thing is used to call tryNewGraph only once and will remain here
-    // until we implement some logic which will allow us to decide when to create a new graph
-    public static int HACKY_VARIABLE = 0;
-
     public static final Logger LOG = LoggerFactory.getLogger("optimizer.executor");
 
     private Pipeline currentPipeline = null;
@@ -45,17 +42,18 @@ public class ExecutorImpl implements Executor, Serializable, AutoCloseable {
 
     private CountDownLatch newGraphLatch = null;
 
-    private final List<SourceCommunicator> currentSources;
-    private final List<SourceCommunicator> newSources;
+    private final List<SourceCommunicator> currentSources = new ArrayList<>();
+    private final List<SourceCommunicator> newSources = new ArrayList<>();
 
     private final AddressesServer addressesServer;
 
     private JobClient client = null;
 
+    // TODO will be replaced with a list or smth
+    private int jobCounter = 0;
+
     public ExecutorImpl(final String optionsArguments) {
         this.optionsArguments = optionsArguments;
-        currentSources = new ArrayList<>();
-        newSources = new ArrayList<>();
         try {
             addressesServer = new AddressesServer(30303);
         } catch (IOException e) {
@@ -74,6 +72,7 @@ public class ExecutorImpl implements Executor, Serializable, AutoCloseable {
     public void submitSource(String sourceHostAndPort) {
         final String host = sourceHostAndPort.substring(0, sourceHostAndPort.lastIndexOf(':'));
         final int port = Integer.parseInt(sourceHostAndPort.substring(sourceHostAndPort.lastIndexOf(':') + 1));
+        LOG.info("host and port submitted " + sourceHostAndPort);
         // TODO blatant hack, replace with some vaguely coherent logic later, like labeling each source with a pipeline number or something
         if (newSources.stream().noneMatch(it -> it.address.getHostName().equals(host) && it.address.getPort() == port)) {
             LOG.info("adding source on executor: " + sourceHostAndPort);
@@ -81,7 +80,7 @@ public class ExecutorImpl implements Executor, Serializable, AutoCloseable {
             newSources.add(source);
         }
         if (newGraphLatch != null) {
-            LOG.info("counting down the latch");
+            LOG.info("counting down the latch for " + sourceHostAndPort);
             newGraphLatch.countDown();
         }
     }
@@ -90,7 +89,7 @@ public class ExecutorImpl implements Executor, Serializable, AutoCloseable {
     public void startOrUpdate(Pipeline pipeline, Consumer<ChangingStatus> statusConsumer) throws InterruptedException {
         LOG.info("start or update pipeline");
 
-        HACKY_VARIABLE++;
+//        System.out.println(PipelineDotRenderer.toDotString(pipeline));
         // turns out job name is set from the options that are set in the runner
         // so now we have two runners for two different jobs with, most importantly, two different names
         // btw options cannot be copied, only recreated from args apparently,
@@ -99,22 +98,33 @@ public class ExecutorImpl implements Executor, Serializable, AutoCloseable {
         oldOptions.setJobName("old_graph");
         final PipelineRunner<@NonNull PipelineResult> oldRunner = FlinkRunner.fromOptions(oldOptions);
         final PipelineOptions newOptions = PipelineOptionsFactory.fromArgs(optionsArguments.split(" ")).withValidation().as(NexmarkOptions.class);
-        newOptions.setJobName("new_graph");
+        newOptions.setJobName("new_graph" + jobCounter);
         final PipelineRunner<@NonNull PipelineResult> newRunner = FlinkRunner.fromOptions(newOptions);
 
 
         LOG.info("current pipeline is not null " + (currentPipeline != null));
         if (currentPipeline != null) {
-            // old graph is currently in new sources -- transfer it to current sources
-            currentSources.clear();
-            currentSources.addAll(newSources);
-            newSources.clear();
+            if (jobCounter == 0) {
+                // old graph is currently in new sources -- transfer it to current sources
+                currentSources.clear();
+                currentSources.addAll(newSources);
+                newSources.clear();
+            }
+
+            LOG.info("current sources " + currentSources.stream().map(it -> it.address.toString()).collect(Collectors.joining(" ")));
 
             CountDownLatch pauseLatch = new CountDownLatch(currentSources.size());
             newGraphLatch = new CountDownLatch(currentSources.size());
 
-            pipeline.getOptions().setJobName("new_graph");
-            newRunner.run(pipeline);
+            jobCounter++;
+
+            PipelineResult result = null;
+            try {
+                result = newRunner.run(pipeline);
+            } catch (RuntimeException e) {
+                LOG.error("error", e);
+                System.err.println(e.getMessage());
+            }
 
             LOG.info("about to wait on latch");
             newGraphLatch.await();
@@ -128,28 +138,34 @@ public class ExecutorImpl implements Executor, Serializable, AutoCloseable {
             LOG.info("wait on pause latch");
             pauseLatch.await();
             LOG.info("pause latch is ok actually");
-            final long maxWatermark = Collections.max(watermarks);
-            for (SourceCommunicator source : currentSources) {
-                LOG.info("calling halt on executor " + source.address);
-                source.halt(maxWatermark);
+            final long maxWatermark = watermarks.isEmpty() ? -1 : Collections.max(watermarks);
+            if (maxWatermark == -1) {
+                LOG.info("no watermarks");
+            } else {
+                for (SourceCommunicator source : currentSources) {
+                    LOG.info("calling halt on executor " + source.address);
+                    source.halt(maxWatermark);
+                }
+
+                currentPipeline = pipeline;
+                currentSources.clear();
+                currentSources.addAll(newSources);
+                newSources.clear();
+                for (SourceCommunicator source : currentSources) {
+                    source.resumeTo(maxWatermark);
+                }
             }
 
-            currentPipeline = pipeline;
-            currentSources.clear();
-            currentSources.addAll(newSources);
-            newSources.clear();
-            for (SourceCommunicator source : currentSources) {
-                source.resumeTo(maxWatermark);
-            }
 
             if (client != null) {
                 client.cancel();
+                if (result instanceof FlinkDetachedRunnerResultWithJobClient) {
+                    client = ((FlinkDetachedRunnerResultWithJobClient) result).getJobClient();
+                }
             }
         }
         else {
             currentPipeline = pipeline;
-            pipeline.getOptions().setJobName("old_graph");
-            LOG.info(pipeline.getOptions().getJobName());
             PipelineResult result = oldRunner.run(pipeline);
             if (result instanceof FlinkDetachedRunnerResultWithJobClient) {
                 client = ((FlinkDetachedRunnerResultWithJobClient) result).getJobClient();

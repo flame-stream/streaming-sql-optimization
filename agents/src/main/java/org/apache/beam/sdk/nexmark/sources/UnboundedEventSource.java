@@ -54,7 +54,7 @@ public class UnboundedEventSource extends UnboundedSource<Event, GeneratorCheckp
     private static final Logger LOG = LoggerFactory.getLogger("latency");
 
     /** Configuration for generator to use when reading synthetic events. May be split. */
-    private final GeneratorConfig config;
+    public final GeneratorConfig config;
 
     /** How many unbounded sources to create. */
     private final int numEventGenerators;

@@ -24,6 +24,22 @@
         </encoder>
     </appender>
 
+    <appender name="PLANNER_FILE" class="ch.qos.logback.core.FileAppender">
+        <file>planner.log</file>
+        <param name="Append" value="false" />
+        <encoder>
+            <pattern>%date %logger{10} [%file:%line] %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <appender name="STREAM_CONFIG_FILE" class="ch.qos.logback.core.FileAppender">
+        <file>streamconfig.log</file>
+        <param name="Append" value="false" />
+        <encoder>
+            <pattern>%date %logger{10} [%file:%line] %msg%n</pattern>
+        </encoder>
+    </appender>
+
 
     <!--<appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
@@ -53,6 +69,12 @@
     </logger>
     <logger name="latency" level="info">
         <appender-ref ref="LATENCY_FILE" />
+    </logger>
+    <logger name="planner" level="info">
+        <appender-ref ref="PLANNER_FILE" />
+    </logger>
+    <logger name="streamconfig" level="info">
+        <appender-ref ref="STREAM_CONFIG_FILE" />
     </logger>
 
 </configuration>
