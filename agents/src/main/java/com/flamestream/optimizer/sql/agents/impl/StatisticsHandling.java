@@ -46,10 +46,8 @@ public class StatisticsHandling {
 
         @ProcessElement
         public void processElement(ProcessContext c, BoundedWindow window) {
-            LOG.info("element of stats processing " + c.element());
         }
 
-        // TODO why here? what is this meant to accomplish?
         @OnWindowExpiration
         public void onWindowExpiration(BoundedWindow boundedWindow) {
             this.boundedWindow = boundedWindow;
@@ -92,7 +90,6 @@ public class StatisticsHandling {
 
         @ProcessElement
         public void processElement(ProcessContext c, BoundedWindow window) {
-            LOG.info("user agent " + userAgent);
             if (
                     pendingCardinality.computeIfAbsent(window.maxTimestamp(), __ -> new HashMap<>())
                             .putIfAbsent(c.element().getKey(), c.element().getValue()) != null

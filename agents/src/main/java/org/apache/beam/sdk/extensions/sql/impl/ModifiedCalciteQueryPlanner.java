@@ -246,12 +246,14 @@ public class ModifiedCalciteQueryPlanner implements QueryPlanner {
                 return null;
             }
             if ((predicate == null || predicate.isAlwaysTrue()) && groupKey.cardinality() == 1) {
+                final String key = "table_column_distinct_row_count:" + Stream.concat(
+                        rel.getTable().getQualifiedName().stream(),
+                        Stream.of(rel.getBeamSqlTable().getSchema().nameOf(groupKey.nextSetBit(0)))
+                ).map(String::toLowerCase).collect(Collectors.joining("."));
                 final var distinctRowCount =
-                        queryParameters.named().get("table_column_distinct_row_count:" + Stream.concat(
-                                rel.getTable().getQualifiedName().stream(),
-                                Stream.of(rel.getBeamSqlTable().getSchema().nameOf(groupKey.nextSetBit(0)))
-                        ).map(String::toLowerCase).collect(Collectors.joining(".")));
+                        queryParameters.named().get(key);
                 if (distinctRowCount instanceof Number) {
+                    LOG.info("distinct row count key " + key + " value " + distinctRowCount);
                     return ((Number) distinctRowCount).doubleValue();
                 }
             }
@@ -287,6 +289,7 @@ public class ModifiedCalciteQueryPlanner implements QueryPlanner {
                         final var uniqueLeft = uniqueValues(rel, mq, equals.getOperands().get(0));
                         final var uniqueRight = uniqueValues(rel, mq, equals.getOperands().get(1));
                         if (uniqueLeft != null && uniqueRight != null) {
+//                            sel *= Double.max(uniqueLeft, uniqueRight) * 0.0001;
                             sel *= Double.min(uniqueLeft, uniqueRight) / uniqueLeft / uniqueRight;
                         } else {
                             sel *= 0.15D;
@@ -298,8 +301,10 @@ public class ModifiedCalciteQueryPlanner implements QueryPlanner {
                     }
                 }
 
+                LOG.info("selectivity for " + rel.getDescription() + " " + sel * artificialSel);
                 return sel * artificialSel;
             } else {
+                LOG.info("selectivity for " + rel.getDescription() + " " + sel);
                 return sel;
             }
         }
@@ -310,11 +315,11 @@ public class ModifiedCalciteQueryPlanner implements QueryPlanner {
                 final var leftFieldCount = rel.getLeft().getRowType().getFieldCount();
                 if (inputRef.getIndex() < leftFieldCount) {
                     var res = mq.getDistinctRowCount(rel.getLeft(), ImmutableBitSet.of(inputRef.getIndex()), null);
-                    LOG.info("left selectivity " + res);
+                    LOG.info("left unique values " + res + " for " + rel.getLeft().getDescription());
                     return res;
                 } else {
                     var res = mq.getDistinctRowCount(rel.getRight(), ImmutableBitSet.of(inputRef.getIndex() - leftFieldCount), null);
-                    LOG.info("right selectivity " + res);
+                    LOG.info("right unique values " + res + " for " + rel.getRight().getDescription());
                     return res;
                 }
             }

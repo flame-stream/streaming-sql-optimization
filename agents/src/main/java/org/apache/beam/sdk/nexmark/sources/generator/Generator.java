@@ -265,34 +265,17 @@ public class Generator implements Iterator<TimestampedValue<Event>>, Serializabl
 //            LOG.info("generated [PERSON ] " + new DateTime(adjustedEventTimestamp));
             event =
                     new Event(nextPerson(newEventId, random, new DateTime(adjustedEventTimestamp), config));
-            personsCountSoFar++;
         } else if (rem < personProportion + auctionProportion) {
 //            LOG.info("generated [AUCTION] " + new DateTime(adjustedEventTimestamp));
             event =
                     new Event(
                             nextAuction(eventsCountSoFar, newEventId, random, adjustedEventTimestamp, config));
-            auctionsCountSoFar++;
         } else {
 //            LOG.info("generated [Bid    ]  " + new DateTime(adjustedEventTimestamp));
             event = new Event(nextBid(newEventId, random, adjustedEventTimestamp, config));
-            bidsCountSoFar++;
         }
 
         eventsCountSoFar++;
-        eventsCountSoFarWithCurrentParams++;
-
-        if (eventsCountSoFar % 50 == 0) {
-            LOG.info("person/total " + (double)personsCountSoFar / eventsCountSoFarWithCurrentParams);
-            LOG.info("auction/total " + (double)auctionsCountSoFar / eventsCountSoFarWithCurrentParams);
-            LOG.info("bid/total " + (double)bidsCountSoFar / eventsCountSoFarWithCurrentParams);
-        }
-
-        if (eventsCountSoFar % 100000 == 0) {
-            LOG.info("persons " + personsCountSoFar);
-            LOG.info("auctions " + auctionsCountSoFar);
-            LOG.info("bids " + bidsCountSoFar);
-            LOG.info("total " + eventsCountSoFar);
-        }
 
         return new NextEvent(wallclockTimestamp, adjustedEventTimestamp, event, watermark);
     }

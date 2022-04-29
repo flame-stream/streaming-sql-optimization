@@ -68,9 +68,7 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
     private ByteString checkpointMarkString = null;
 
     private Map<String, ?> parametersMap = new HashMap<>();
-
-    private int windowCounter = 0;
-    private Map<String, Integer> targetWindowCount = new HashMap<>();
+    private boolean checkNextStats = false;
 
     @Override
     public void close() throws Exception {
@@ -116,19 +114,32 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
                                 Map.Entry::getValue
                         ));
 
-                        final RelOptCost cost = estimator.getCumulativeCost(
+                        RelOptCost cost = estimator.getCumulativeCost(
                                 relNode,
-                                parametersMap
+                                currentParametersMap
                         );
                         LOG.info("cost " + cost.toString());
 
-                        if (parametersMap.isEmpty()) {
-                            parametersMap = currentParametersMap;
-                        } else if (currentParametersMap.entrySet().stream().anyMatch((entry -> entry.getValue() instanceof Double && Math.abs((Double)entry.getValue() - (Double)parametersMap.get(entry.getKey())) > 300))) {
-                            parametersMap = currentParametersMap;
-                            final QueryPlanner.QueryParameters parameters = QueryPlanner.QueryParameters.ofNamed(parametersMap);
-                            tryNewGraph(0, parameters);
+                        if (!parametersMap.isEmpty()) {
+                            if (checkNextStats && currentParametersMap.entrySet().stream().allMatch((entry -> entry.getValue() instanceof Double && Math.abs((Double)entry.getValue() - (Double)parametersMap.get(entry.getKey())) < 100))) {
+                                checkNextStats = false;
+                                LOG.info("next stats important enough");
+                                LOG.info("old stats");
+                                parametersMap.forEach((key, value1) -> LOG.info("key " + key + " value " + value1));
+                                LOG.info("current stats");
+                                currentParametersMap.forEach((key, value1) -> LOG.info("key " + key + " value " + value1));
+
+                                tryNewGraph(0, currentParametersMap);
+                            } else if (!checkNextStats && currentParametersMap.entrySet().stream().anyMatch((entry -> entry.getValue() instanceof Double && Math.abs((Double)entry.getValue() - (Double)parametersMap.get(entry.getKey())) > 150))) {
+                                checkNextStats = true;
+                                LOG.info("check next stats");
+                                LOG.info("old stats");
+                                parametersMap.forEach((key, value1) -> LOG.info("key " + key + " value " + value1));
+                                LOG.info("current stats");
+                                currentParametersMap.forEach((key, value1) -> LOG.info("key " + key + " value " + value1));
+                            }
                         }
+                        parametersMap = currentParametersMap;
                     }
 
                     @Override
@@ -215,11 +226,11 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
     }
 
     private void tryNewGraph(int runningJobIndex) {
-        tryNewGraph(runningJobIndex, QueryPlanner.QueryParameters.ofNone());
+        tryNewGraph(runningJobIndex, new HashMap<>());
     }
 
     private boolean tryNewGraph(int runningJobIndex,
-                                QueryPlanner.QueryParameters queryParameters) {
+                                Map<String, ?> parametersMap) {
         // here we need to give list of providers to newSqlTransform method
         /*SqlTransform newSqlTransform =
                 updateSqlTransform(sqlQueryJob.query(), ImmutableList.of());
@@ -230,6 +241,9 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
         final SqlQueryJob sqlQueryJob = runningJobs.get(runningJobIndex).sqlQueryJob;
 
         final var pipeline = Pipeline.create();
+        final QueryPlanner.QueryParameters queryParameters = parametersMap.isEmpty() ?
+                QueryPlanner.QueryParameters.ofNone() :
+                QueryPlanner.QueryParameters.ofNamed(parametersMap);
         final BeamRelNode relNode = createPipeline(pipeline, sqlQueryJob, queryParameters);
         final RelOptCost newCost = estimator.getCumulativeCost(relNode, parametersMap);
         final RelOptCost currentCost = estimator.getCumulativeCost(runningJobs.get(0).beamRelNode, parametersMap);
@@ -307,8 +321,6 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
         var beamRelNode = env.parseQuery(sqlQueryJob.query(), queryParameters);
 
         var fieldsOfInterest = new SqlQueryInspector().inspectQuery(beamRelNode);
-
-        fieldsOfInterest.values().forEach(it -> it.forEach(LOG::info));
 
         final var stats = fieldsOfInterest.entrySet().stream().flatMap(interest ->
                 interest.getKey() instanceof BeamIOSourceRel
