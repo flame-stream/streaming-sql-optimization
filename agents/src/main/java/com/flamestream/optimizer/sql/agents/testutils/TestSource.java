@@ -107,8 +107,18 @@ public class TestSource {
     }
 
     public static UnboundedEventSource getTestSource() {
+        return getConfiguredTestSource(5, 90, 5, 2000000, 2500);
+    }
+
+    public static UnboundedEventSource getConfiguredTestSource(
+            int personProportion,
+            int auctionProportion,
+            int bidProportion,
+            int numberEvents,
+            int ratePerSec
+    ) {
         final NexmarkConfiguration config = NexmarkConfiguration.DEFAULT;
-        config.numEvents = 600000;
+        config.numEvents = numberEvents;
         config.isRateLimited = true;
         config.streamTimeout = 15 * 60;
 //        config.useWallclockEventTime = true;
@@ -116,8 +126,11 @@ public class TestSource {
         config.numEventGenerators = 1;
         config.probDelayedEvent = 0.0;
         config.occasionalDelaySec = 0;
-        config.firstEventRate = 2500;
-        config.nextEventRate = 2500;
+        config.firstEventRate = ratePerSec;
+        config.nextEventRate = ratePerSec;
+        config.personProportion = personProportion;
+        config.auctionProportion = auctionProportion;
+        config.bidProportion = bidProportion;
         var generatorConfig = new GeneratorConfig(
                 config,
                 1637695440000L,

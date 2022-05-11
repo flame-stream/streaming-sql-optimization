@@ -1,6 +1,7 @@
 package com.flamestream.optimizer.sql.agents;
 
 import com.flamestream.optimizer.sql.agents.impl.CostEstimatorImpl;
+import com.flamestream.optimizer.sql.agents.latency.Latency;
 import com.flamestream.optimizer.sql.agents.testutils.TestSource;
 import org.apache.beam.sdk.nexmark.NexmarkOptions;
 import org.apache.beam.sdk.nexmark.model.Event;
@@ -22,6 +23,7 @@ import org.junit.rules.TemporaryFolder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.Serializable;
 import java.util.List;
 import java.util.stream.Stream;
 
@@ -56,11 +58,11 @@ public class CoordinatorExecutorPipelineTest {
         );
 
         // should probably be configured some other way but this was the easiest
-        final String argsString = "--runner=FlinkRunner --streaming=true --manageResources=false --monitorJobs=true --flinkMaster=localhost:8082 --tempLocation=" + folder.getRoot().getAbsolutePath();
+        final String argsString = "--runner=FlinkRunner --streaming=true --manageResources=false --monitorJobs=true --flinkMaster=localhost:8081 --tempLocation=" + folder.getRoot().getAbsolutePath();
 //        final String argsString = "--runner=FlinkRunner --streaming=true --manageResources=false --monitorJobs=true --flinkMaster=[local] --tempLocation=" + folder.getRoot().getAbsolutePath();
         final String[] args = argsString.split(" ");
         final PipelineOptions options = PipelineOptionsFactory.fromArgs(args).withValidation().as(NexmarkOptions.class);
-        CoordinatorExecutorPipeline.fromSqlQueryJob(new CostEstimatorImpl(), List.of(source), argsString, plan2);
+        CoordinatorExecutorPipeline.fromSqlQueryJob(new CostEstimatorImpl(), List.of(source), argsString, plan1);
     }
 
     public static class LoggingFunction extends DoFn<String, String> {
@@ -99,7 +101,7 @@ public class CoordinatorExecutorPipelineTest {
         }
     }
 
-    private static class TestSqlJob implements Coordinator.SqlQueryJob {
+    private static class TestSqlJob implements Coordinator.SqlQueryJob, Serializable {
         private final String query;
         private final int window;
 

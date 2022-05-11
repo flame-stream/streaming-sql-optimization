@@ -50,7 +50,7 @@ import org.slf4j.LoggerFactory;
  */
 public class Generator implements Iterator<TimestampedValue<Event>>, Serializable {
 
-    private static final Logger LOG = LoggerFactory.getLogger("generator");
+    public static final Logger LOG = LoggerFactory.getLogger("generator");
 
     /**
      * The next event and its various timestamps. Ordered by increasing wallclock timestamp, then
@@ -265,14 +265,24 @@ public class Generator implements Iterator<TimestampedValue<Event>>, Serializabl
 //            LOG.info("generated [PERSON ] " + new DateTime(adjustedEventTimestamp));
             event =
                     new Event(nextPerson(newEventId, random, new DateTime(adjustedEventTimestamp), config));
+
+            if (adjustedEventTimestamp >= 1637695440000L + 60000 && adjustedEventTimestamp < 1637695440000L + 80000) {
+                LOG.info("generated [PERSON ] " + event.newPerson.id + " " + new DateTime(adjustedEventTimestamp));
+            }
         } else if (rem < personProportion + auctionProportion) {
 //            LOG.info("generated [AUCTION] " + new DateTime(adjustedEventTimestamp));
             event =
                     new Event(
                             nextAuction(eventsCountSoFar, newEventId, random, adjustedEventTimestamp, config));
+            if (adjustedEventTimestamp >= 1637695440000L + 60000 && adjustedEventTimestamp < 1637695440000L + 80000) {
+                LOG.info("generated [AUCTION] " + event.newAuction.seller + " " + new DateTime(adjustedEventTimestamp));
+            }
         } else {
 //            LOG.info("generated [Bid    ]  " + new DateTime(adjustedEventTimestamp));
             event = new Event(nextBid(newEventId, random, adjustedEventTimestamp, config));
+            if (adjustedEventTimestamp >= 1637695440000L + 60000 && adjustedEventTimestamp < 1637695440000L + 80000) {
+                LOG.info("generated [Bid    ]  " + event.bid.bidder + " " + new DateTime(adjustedEventTimestamp));
+            }
         }
 
         eventsCountSoFar++;

@@ -43,18 +43,17 @@ public class SourceWrapper<T, U extends UnboundedSource.CheckpointMark> extends 
 
     private final boolean holdUntilResume;
 
-    public SourceWrapper(final UnboundedSource<T, U> source) {
-        this(source, false, null);
+    private final String coordinatorHost;
+
+    public SourceWrapper(final UnboundedSource<T, U> source, String coordinatorHost) {
+        this(source, false, null, coordinatorHost);
     }
 
-    public SourceWrapper(final UnboundedSource<T, U> source, boolean holdUntilResume) {
-        this(source, holdUntilResume, null);
-    }
-
-    public SourceWrapper(final UnboundedSource<T, U> source, boolean holdUntilResume, final byte[] mark) {
+    public SourceWrapper(final UnboundedSource<T, U> source, boolean holdUntilResume, final byte[] mark, String coordinatorHost) {
         this.source = source;
         this.holdUntilResume = holdUntilResume;
         this.checkpointMarkSerialized = mark;
+        this.coordinatorHost = coordinatorHost;
         LOG.info("hold until resume " + holdUntilResume);
     }
 
@@ -113,9 +112,10 @@ public class SourceWrapper<T, U extends UnboundedSource.CheckpointMark> extends 
             }
             LOG.info("started worker server on source on port " + portNumber);
             workerServer = new WorkerServer(portNumber);
-            checkpointsSender = new CheckpointsSender(new InetSocketAddress(20202), getPortNumber());
-            AddressSender addressSender = new AddressSender(new InetSocketAddress(30303));
-            String host = NetworkUtil.getLocalAddressHost(new InetSocketAddress(30303));
+            checkpointsSender = new CheckpointsSender(new InetSocketAddress(coordinatorHost, 20202), getPortNumber());
+            AddressSender addressSender = new AddressSender(new InetSocketAddress(coordinatorHost, 30303));
+            //String host = NetworkUtil.getLocalAddressHost(new InetSocketAddress(30303));
+            String host = NetworkUtil.getIPHost();
             addressSender.sendAddress(host + ":" + getPortNumber());
         }
 
@@ -311,7 +311,8 @@ public class SourceWrapper<T, U extends UnboundedSource.CheckpointMark> extends 
                                 ) {
                                     @Override
                                     public void start(Listener<RespT> responseListener, Metadata headers) {
-                                        String host = NetworkUtil.getLocalAddressHost(address);
+                                        String host = NetworkUtil.getIPHost();
+                                        //String host = NetworkUtil.getLocalAddressHost(address);
                                         headers.put(CHECKPOINT_TAG, host + ":" + portNumber);
                                         super.start(responseListener, headers);
                                     }

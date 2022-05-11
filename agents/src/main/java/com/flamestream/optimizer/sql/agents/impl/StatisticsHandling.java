@@ -17,6 +17,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -46,6 +47,9 @@ public class StatisticsHandling {
 
         @ProcessElement
         public void processElement(ProcessContext c, BoundedWindow window) {
+            if (window.toString().equals("[2021-11-23T19:29:00.000Z..2021-11-23T19:29:20.000Z)")) {
+                LOG.info(c.element().toString());
+            }
         }
 
         @OnWindowExpiration
@@ -69,7 +73,6 @@ public class StatisticsHandling {
     public static class StatsDoFn extends DoFn<KV<String, Double>, Void> {
         private final InetSocketAddress executorAddress;
         private final int cardinalitiesNumber;
-        private String userAgent;
 
         public StatsDoFn(InetSocketAddress executorAddress, int cardinalitiesNumber) {
             this.executorAddress = executorAddress;
@@ -84,7 +87,8 @@ public class StatisticsHandling {
         public void setup() throws IOException {
             final int statsPort = ThreadLocalRandom.current().nextInt(9000, 10000);
             LOG.info("new stats port " + statsPort);
-            userAgent = NetworkUtil.getLocalAddressHost(executorAddress) + ":" + statsPort;
+//            userAgent = executorAddress.getHostName() + ":" + statsPort;
+            String userAgent = NetworkUtil.getIPHost() + ":" + statsPort;
             statsSender = new StatsSender(executorAddress, userAgent);
         }
 
@@ -105,6 +109,7 @@ public class StatisticsHandling {
                 final var timeCardinality = timeCardinalityIterator.next();
                 if (timeCardinality.getValue().size() == cardinalitiesNumber) {
                     final var millis = timeCardinality.getKey().getMillis();
+                    LOG.info("sending stats " + timeCardinality.getValue());
                     statsSender.send(millis, timeCardinality.getValue());
                     timeCardinalityIterator.remove();
                 }
@@ -124,7 +129,7 @@ public class StatisticsHandling {
         }
     }
 
-    public static class NIOServer implements AutoCloseable {
+    public static class NIOServer implements AutoCloseable, Serializable {
         private final Server server;
 
         public NIOServer(
@@ -193,7 +198,7 @@ public class StatisticsHandling {
         public StatsSender(InetSocketAddress address, String target
                 //, List<String> sourceAddresses
         ) {
-            LOG.info("called stats sender constructor");
+            LOG.info("called stats sender constructor for address " + address + " target " + target);
             managedChannel = ManagedChannelBuilder.forAddress(address.getHostName(), address.getPort())
                     .usePlaintext().intercept(new ClientInterceptor() {
                         @Override

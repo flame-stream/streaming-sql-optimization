@@ -7,12 +7,13 @@ import io.grpc.*;
 import io.grpc.stub.StreamObserver;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.function.Function;
 
 import static com.flamestream.optimizer.sql.agents.source.SourceWrapper.CHECKPOINT_TAG;
 
 public class CheckpointsHandling {
-    public static class NIOServer implements AutoCloseable {
+    public static class NIOServer implements AutoCloseable, Serializable {
         private final Server server;
 
         public NIOServer(int port, Function<String, StreamObserver<Services.Checkpoint>> observer) throws IOException {

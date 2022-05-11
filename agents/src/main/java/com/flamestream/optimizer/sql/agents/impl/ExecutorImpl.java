@@ -8,6 +8,7 @@ import com.google.protobuf.Empty;
 import io.grpc.*;
 import io.grpc.stub.StreamObserver;
 import org.apache.beam.runners.flink.FlinkDetachedRunnerResultWithJobClient;
+import org.apache.beam.runners.flink.FlinkPipelineOptions;
 import org.apache.beam.runners.flink.FlinkRunner;
 import org.apache.beam.sdk.Pipeline;
 import org.apache.beam.sdk.PipelineResult;
@@ -36,7 +37,8 @@ import java.util.stream.Collectors;
 public class ExecutorImpl implements Executor, Serializable, AutoCloseable {
     public static final Logger LOG = LoggerFactory.getLogger("optimizer.executor");
 
-    private Pipeline currentPipeline = null;
+    private boolean running = false;
+//    private Pipeline currentPipeline = null;
 //    private final PipelineOptions options;
     private final String optionsArguments;
 
@@ -94,16 +96,16 @@ public class ExecutorImpl implements Executor, Serializable, AutoCloseable {
         // so now we have two runners for two different jobs with, most importantly, two different names
         // btw options cannot be copied, only recreated from args apparently,
         // hence passing the args string here, which is terrible and bizarre
-        final PipelineOptions oldOptions = PipelineOptionsFactory.fromArgs(optionsArguments.split(" ")).withValidation().as(NexmarkOptions.class);
+        final FlinkPipelineOptions oldOptions = PipelineOptionsFactory.fromArgs(optionsArguments.split(" ")).withValidation().as(FlinkPipelineOptions.class);
         oldOptions.setJobName("old_graph");
         final PipelineRunner<@NonNull PipelineResult> oldRunner = FlinkRunner.fromOptions(oldOptions);
-        final PipelineOptions newOptions = PipelineOptionsFactory.fromArgs(optionsArguments.split(" ")).withValidation().as(NexmarkOptions.class);
+        final PipelineOptions newOptions = PipelineOptionsFactory.fromArgs(optionsArguments.split(" ")).withValidation().as(FlinkPipelineOptions.class);
         newOptions.setJobName("new_graph" + jobCounter);
         final PipelineRunner<@NonNull PipelineResult> newRunner = FlinkRunner.fromOptions(newOptions);
 
 
-        LOG.info("current pipeline is not null " + (currentPipeline != null));
-        if (currentPipeline != null) {
+//        LOG.info("current pipeline is not null " + (currentPipeline != null));
+        if (running) {
             if (jobCounter == 0) {
                 // old graph is currently in new sources -- transfer it to current sources
                 currentSources.clear();
@@ -147,7 +149,7 @@ public class ExecutorImpl implements Executor, Serializable, AutoCloseable {
                     source.halt(maxWatermark);
                 }
 
-                currentPipeline = pipeline;
+//                currentPipeline = pipeline;
                 currentSources.clear();
                 currentSources.addAll(newSources);
                 newSources.clear();
@@ -165,7 +167,7 @@ public class ExecutorImpl implements Executor, Serializable, AutoCloseable {
             }
         }
         else {
-            currentPipeline = pipeline;
+            running = true;
             PipelineResult result = oldRunner.run(pipeline);
             if (result instanceof FlinkDetachedRunnerResultWithJobClient) {
                 client = ((FlinkDetachedRunnerResultWithJobClient) result).getJobClient();
@@ -176,7 +178,8 @@ public class ExecutorImpl implements Executor, Serializable, AutoCloseable {
     @Nullable
     @Override
     public Pipeline current() {
-        return currentPipeline;
+        return null;
+        //return currentPipeline;
     }
 
     public static class SourceCommunicator implements AutoCloseable {

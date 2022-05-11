@@ -9,6 +9,7 @@ import com.flamestream.optimizer.sql.agents.latency.Latency;
 import com.flamestream.optimizer.sql.agents.latency.LatencyCombineFn;
 import com.flamestream.optimizer.sql.agents.source.SourceWrapper;
 import com.flamestream.optimizer.sql.agents.testutils.TestPipelineOptions;
+import com.flamestream.optimizer.sql.agents.util.NetworkUtil;
 import com.flamestream.optimizer.sql.agents.util.SqlTransform;
 import com.google.common.collect.ImmutableList;
 import com.google.protobuf.ByteString;
@@ -21,6 +22,7 @@ import org.apache.beam.sdk.extensions.sql.impl.BeamSqlEnv;
 import org.apache.beam.sdk.extensions.sql.impl.CalciteQueryPlanner;
 import org.apache.beam.sdk.extensions.sql.impl.ModifiedCalciteQueryPlanner;
 import org.apache.beam.sdk.extensions.sql.impl.QueryPlanner;
+import org.apache.beam.sdk.extensions.sql.impl.planner.BeamCostModel;
 import org.apache.beam.sdk.extensions.sql.impl.rel.BeamIOSourceRel;
 import org.apache.beam.sdk.extensions.sql.impl.rel.BeamRelNode;
 import org.apache.beam.sdk.extensions.sql.impl.rel.BeamSqlRelUtils;
@@ -28,7 +30,6 @@ import org.apache.beam.sdk.extensions.sql.impl.schema.BeamPCollectionTable;
 import org.apache.beam.sdk.extensions.sql.meta.provider.ReadOnlyTableProvider;
 import org.apache.beam.sdk.io.Read;
 import org.apache.beam.sdk.io.UnboundedSource;
-import org.apache.beam.sdk.nexmark.sources.UnboundedEventSource;
 import org.apache.beam.sdk.options.PipelineOptions;
 import org.apache.beam.sdk.schemas.Schema;
 import org.apache.beam.sdk.transforms.*;
@@ -36,18 +37,15 @@ import org.apache.beam.sdk.transforms.windowing.BoundedWindow;
 import org.apache.beam.sdk.transforms.windowing.Window;
 import org.apache.beam.sdk.values.*;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.plan.RelOptCost;
-import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rel.externalize.RelJsonWriter;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rel.metadata.RelMetadataProvider;
 import org.checkerframework.checker.nullness.compatqual.NonNullType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.net.InetSocketAddress;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -55,7 +53,7 @@ import java.util.stream.Stream;
 @SuppressWarnings({
         "nullness"
 })
-public class CoordinatorImpl implements Coordinator, AutoCloseable {
+public class CoordinatorImpl implements Coordinator, AutoCloseable, Serializable {
     private final static Logger LOG = LoggerFactory.getLogger("optimizer.coordinator");
 
     private final List<SourceWithSchema<?>> sourcesList = new ArrayList<>();
@@ -63,6 +61,7 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
     private final Executor executor;
     private final StatisticsHandling.NIOServer statisticsServer;
     private final CheckpointsHandling.NIOServer checkpointsServer;
+    private final String coordinatorHost;
     private final List<Running> runningJobs = new ArrayList<>();
     private BeamRelNode currentGraph = null;
     private ByteString checkpointMarkString = null;
@@ -101,6 +100,7 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
     public CoordinatorImpl(CostEstimator estimator, Executor executor) {
         this.estimator = estimator;
         this.executor = executor;
+        this.coordinatorHost = NetworkUtil.getIPHost();
         try {
             LOG.info("starting a statistics server on port 1337");
             statisticsServer = new StatisticsHandling.NIOServer(1337, target -> {
@@ -248,7 +248,7 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
         final RelOptCost newCost = estimator.getCumulativeCost(relNode, parametersMap);
         final RelOptCost currentCost = estimator.getCumulativeCost(runningJobs.get(0).beamRelNode, parametersMap);
         LOG.info("new cost " + newCost + " old cost " + currentCost);
-        if (newCost.isLt(currentCost)) {
+        if (newCost.isLt(currentCost) && !currentCost.minus(newCost).isLt(BeamCostModel.FACTORY.makeCost(50.0, 0.0))) {
             try {
                 LOG.info("trying a new graph");
                 executor.startOrUpdate(pipeline, null);
@@ -257,8 +257,8 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
                 runningJobs.add(runningJobIndex, new Running(sqlQueryJob, relNode));
 
                 return true;
-            } catch (InterruptedException e) {
-                e.printStackTrace();
+            } catch (Exception e) {
+                LOG.error("error while trying to launch the new graph", e);
             }
         }
         return false;
@@ -299,7 +299,7 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
         HashMap<String, PCollection<Row>> tagged = new HashMap<>();
 
         for (var source : sourcesList) {
-            source.applyTransforms(pipeline, sqlQueryJob, tagged, checkpointMarkString);
+            source.applyTransforms(pipeline, sqlQueryJob, tagged, checkpointMarkString, coordinatorHost);
         }
 
         PCollectionTuple withTags = PCollectionTuple.empty(pipeline);
@@ -340,9 +340,9 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
 
         if (!stats.isEmpty()) {
             PCollectionList.of(stats).apply(Flatten.pCollections()).apply(ParDo.of(new StatisticsHandling.StatsDoFn(
-                    new InetSocketAddress(1337),
+                     new InetSocketAddress(coordinatorHost, 1337),
+//                    new InetSocketAddress(1337),
                     PCollectionList.of(stats).size()
-                    //, sourceAddresses
             )));
         }
 
@@ -354,6 +354,9 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
         });
 
         pipeline.getCoderRegistry().registerCoderForClass(Latency.class, Latency.CODER);
+
+        /*final PCollection<Latency> latencies = sqlQueryPCollection.apply(Combine.globally(new LatencyCombineFn()).withoutDefaults());
+        sqlQueryJob.latencyOutputs().filter(Objects::nonNull).forEach(latencies::apply);*/
 
         sqlQueryPCollection.apply(Combine.globally(new LatencyCombineFn()).withoutDefaults())
                 .apply(ParDo.of(new LatencyLoggingFunction()));
@@ -373,11 +376,12 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable {
         public void applyTransforms(Pipeline pipeline,
                                     SqlQueryJob sqlQueryJob,
                                     HashMap<String, PCollection<Row>> tagged,
-                                    ByteString checkpointString) {
+                                    ByteString checkpointString,
+                                    String coordinatorHost) {
             // TODO let's start with just one checkpoint to see if this works but it's possible that it will lead us nowhere
             SourceWrapper<T, ? extends UnboundedSource.CheckpointMark> sourceWrapper = checkpointString == null ?
-                    new SourceWrapper<>(source) :
-                    new SourceWrapper<>(source, true, checkpointString.toByteArray());
+                    new SourceWrapper<>(source, coordinatorHost) :
+                    new SourceWrapper<>(source, true, checkpointString.toByteArray(), coordinatorHost);
 
             PCollection<T> readFromSource = pipeline.apply(Read.from(sourceWrapper));
             for (var entry : additionalTransforms.entrySet()) {

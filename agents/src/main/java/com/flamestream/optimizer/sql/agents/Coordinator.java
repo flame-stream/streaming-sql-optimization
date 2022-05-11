@@ -1,5 +1,6 @@
 package com.flamestream.optimizer.sql.agents;
 
+import com.flamestream.optimizer.sql.agents.latency.Latency;
 import org.apache.beam.sdk.io.UnboundedSource;
 import org.apache.beam.sdk.schemas.Schema;
 import org.apache.beam.sdk.transforms.Combine;
@@ -33,6 +34,9 @@ public interface Coordinator {
     interface SqlQueryJob {
         String query();
         Stream<PTransform<PCollection<Row>, PDone>> outputs();
+        default Stream<PTransform<PCollection<Latency>, PDone>> latencyOutputs() {
+            return Stream.empty();
+        }
         WindowFn<Object, ? extends BoundedWindow> windowFunction();
     }
 

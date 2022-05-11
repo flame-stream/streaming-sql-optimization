@@ -2,6 +2,7 @@ plugins {
     id 'java'
     id 'com.google.protobuf' version '0.8.17'
     id 'idea'
+    id "com.github.johnrengelman.shadow" version "7.1.2"
 }
 
 repositories {
@@ -30,18 +31,20 @@ dependencies {
     implementation 'org.apache.beam:beam-runners-flink-1.11:2.27.0'
     implementation 'org.apache.beam:beam-runners-spark:2.27.0'
     implementation 'org.apache.beam:beam-sdks-java-io-kafka:2.27.0'
+    implementation 'org.apache.beam:beam-sdks-java-io-clickhouse:2.27.0'
     implementation 'io.confluent:kafka-avro-serializer:5.3.2'
     implementation 'org.apache.beam:beam-runners-direct-java:2.27.0'
     implementation 'org.apache.beam:beam-runners-google-cloud-dataflow-java:2.27.0'
     implementation 'com.google.auto.value:auto-value-annotations:1.8.2'
     annotationProcessor 'com.google.auto.value:auto-value:1.8.2'
+    implementation 'com.google.auto.service:auto-service:1.0.1'
     testImplementation group: 'org.hamcrest', name: 'hamcrest', version: '2.2'
     implementation group: 'org.apache.logging.log4j', name: 'log4j-core', version: '2.14.1'
     implementation group: 'org.apache.logging.log4j', name: 'log4j-api', version: '2.14.1'
-//    testImplementation group: 'org.apache.logging.log4j', name: 'log4j-slf4j-impl', version: '2.14.1'
+//    implementation group: 'org.apache.logging.log4j', name: 'log4j-slf4j-impl', version: '2.14.1'
     // https://mvnrepository.com/artifact/ch.qos.logback/logback-classic
-    testImplementation group: 'ch.qos.logback', name: 'logback-classic', version: '1.2.6'
-    testImplementation group: 'ch.qos.logback', name: 'logback-core', version: '1.2.6'
+    implementation group: 'ch.qos.logback', name: 'logback-classic', version: '1.2.6'
+    implementation group: 'ch.qos.logback', name: 'logback-core', version: '1.2.6'
     implementation group: 'org.apache.beam', name: 'beam-sdks-java-nexmark', version: '2.27.0'
     // https://mvnrepository.com/artifact/com.fasterxml.jackson.core/jackson-databind
     implementation group: 'com.fasterxml.jackson.core', name: 'jackson-databind', version: '2.12.2'
@@ -80,4 +83,9 @@ idea {
         // If you have additional sources, add them here:
 //        sourceDirs += file("/path/to/other/sources");
     }
+}
+
+shadowJar {
+    zip64(true)
+    mergeServiceFiles()
 }

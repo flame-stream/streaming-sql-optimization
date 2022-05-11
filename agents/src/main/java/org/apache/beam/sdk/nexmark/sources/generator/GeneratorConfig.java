@@ -92,9 +92,9 @@ public class GeneratorConfig implements Serializable {
             long maxEventsOrZero,
             long firstEventNumber) {
 
-        personProportion = configuration.PERSON_PROPORTION;
-        auctionProportion = configuration.AUCTION_PROPORTION;
-        bidProportion = configuration.BID_PROPORTION;
+        personProportion = configuration.personProportion;
+        auctionProportion = configuration.auctionProportion;
+        bidProportion = configuration.bidProportion;
         proportionDenominator =
                 personProportion + auctionProportion + bidProportion;
 

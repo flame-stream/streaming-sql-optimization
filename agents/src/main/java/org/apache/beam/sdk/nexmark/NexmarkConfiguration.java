@@ -217,9 +217,9 @@ public class NexmarkConfiguration implements Serializable {
     @JsonProperty public String latencyLogDirectory = "./log/lololo";
 
     /** Proportions of people/auctions/bids to synthesize. */
-    @JsonProperty public int PERSON_PROPORTION = 5;
-    @JsonProperty public int AUCTION_PROPORTION = 90;
-    @JsonProperty public int BID_PROPORTION = 5;
+    @JsonProperty public int personProportion = 5;
+    @JsonProperty public int auctionProportion = 90;
+    @JsonProperty public int bidProportion = 5;
 
     /** Flag to count persons, auctions, bids per window.  */
     @JsonProperty public boolean counting = false;
@@ -355,13 +355,13 @@ public class NexmarkConfiguration implements Serializable {
             latencyLogDirectory = options.getLatencyLogDirectory();
         }
         if (options.getPersonProportion() != null) {
-            PERSON_PROPORTION = options.getPersonProportion();
+            personProportion = options.getPersonProportion();
         }
         if (options.getAuctionProportion() != null) {
-            AUCTION_PROPORTION = options.getAuctionProportion();
+            auctionProportion = options.getAuctionProportion();
         }
         if (options.getBidProportion() != null) {
-            BID_PROPORTION = options.getBidProportion();
+            bidProportion = options.getBidProportion();
         }
         if (options.getCounting() != null) {
             counting = options.getCounting();
@@ -413,9 +413,9 @@ public class NexmarkConfiguration implements Serializable {
         result.usePubsubPublishTime = usePubsubPublishTime;
         result.outOfOrderGroupSize = outOfOrderGroupSize;
         result.latencyLogDirectory = latencyLogDirectory;
-        result.PERSON_PROPORTION = PERSON_PROPORTION;
-        result.AUCTION_PROPORTION = AUCTION_PROPORTION;
-        result.BID_PROPORTION = BID_PROPORTION;
+        result.personProportion = personProportion;
+        result.auctionProportion = auctionProportion;
+        result.bidProportion = bidProportion;
         result.counting = counting;
         return result;
     }
@@ -609,9 +609,9 @@ public class NexmarkConfiguration implements Serializable {
                 usePubsubPublishTime,
                 outOfOrderGroupSize,
                 latencyLogDirectory,
-                PERSON_PROPORTION,
-                AUCTION_PROPORTION,
-                BID_PROPORTION,
+                personProportion,
+                auctionProportion,
+                bidProportion,
                 counting);
     }
 
@@ -751,13 +751,13 @@ public class NexmarkConfiguration implements Serializable {
         if (!latencyLogDirectory.equals(other.latencyLogDirectory)) {
             return false;
         }
-        if (PERSON_PROPORTION != other.PERSON_PROPORTION) {
+        if (personProportion != other.personProportion) {
             return false;
         }
-        if (AUCTION_PROPORTION != other.AUCTION_PROPORTION) {
+        if (auctionProportion != other.auctionProportion) {
             return false;
         }
-        if (BID_PROPORTION != other.BID_PROPORTION) {
+        if (bidProportion != other.bidProportion) {
             return false;
         }
         if (counting != other.counting) {

@@ -16,6 +16,14 @@
         </encoder>
     </appender>
 
+    <appender name="NETWORK_FILE" class="ch.qos.logback.core.FileAppender">
+        <file>network.log</file>
+        <param name="Append" value="false" />
+        <encoder>
+            <pattern>%date %logger{10} [%file:%line] %msg%n</pattern>
+        </encoder>
+    </appender>
+
     <appender name="GENERATOR_FILE" class="ch.qos.logback.core.FileAppender">
         <file>generator.log</file>
         <param name="Append" value="false" />
@@ -68,6 +76,9 @@
     </logger>
     <logger name="optimizer.coordinator" level="info">
         <appender-ref ref="FILE" />
+    </logger>
+    <logger name="util.network" level="info">
+        <appender-ref ref="NETWORK_FILE" />
     </logger>
     <logger name="optimizer.kv" level="info">
         <appender-ref ref="KV_FILE" />

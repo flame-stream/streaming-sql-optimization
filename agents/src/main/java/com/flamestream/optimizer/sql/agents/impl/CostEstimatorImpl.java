@@ -12,9 +12,10 @@ import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rel.metadata.Ch
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rel.metadata.JaninoRelMetadataProvider;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rel.metadata.RelMetadataQuery;
 
+import java.io.Serializable;
 import java.util.Map;
 
-public class CostEstimatorImpl implements CostEstimator {
+public class CostEstimatorImpl implements CostEstimator, Serializable {
     @Override
     public synchronized RelOptCost getCumulativeCost(BeamRelNode rel, Map<String, ?> parameters) {
         final var metadataProvider = rel.getCluster().getMetadataProvider();
