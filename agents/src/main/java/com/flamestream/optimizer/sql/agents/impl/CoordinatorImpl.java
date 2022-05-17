@@ -22,7 +22,6 @@ import org.apache.beam.sdk.extensions.sql.impl.BeamSqlEnv;
 import org.apache.beam.sdk.extensions.sql.impl.CalciteQueryPlanner;
 import org.apache.beam.sdk.extensions.sql.impl.ModifiedCalciteQueryPlanner;
 import org.apache.beam.sdk.extensions.sql.impl.QueryPlanner;
-import org.apache.beam.sdk.extensions.sql.impl.planner.BeamCostModel;
 import org.apache.beam.sdk.extensions.sql.impl.rel.BeamIOSourceRel;
 import org.apache.beam.sdk.extensions.sql.impl.rel.BeamRelNode;
 import org.apache.beam.sdk.extensions.sql.impl.rel.BeamSqlRelUtils;
@@ -38,6 +37,7 @@ import org.apache.beam.sdk.transforms.windowing.Window;
 import org.apache.beam.sdk.values.*;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.plan.RelOptCost;
 import org.apache.beam.vendor.calcite.v1_20_0.org.apache.calcite.rel.metadata.RelMetadataProvider;
+import org.apache.flink.api.common.JobStatus;
 import org.checkerframework.checker.nullness.compatqual.NonNullType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,6 +46,9 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.net.InetSocketAddress;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -63,11 +66,18 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable, Serializable
     private final CheckpointsHandling.NIOServer checkpointsServer;
     private final String coordinatorHost;
     private final List<Running> runningJobs = new ArrayList<>();
+
+    private int statsSinksCounter;
+    private CountDownLatch latch = null;
+
     private BeamRelNode currentGraph = null;
     private ByteString checkpointMarkString = null;
 
     private Map<String, ?> parametersMap = new HashMap<>();
+    private List<Map<String, ?>> parametersMapList = new ArrayList<>();
     private boolean checkNextStats = false;
+
+    private boolean switchGraphs = true;
 
     @Override
     public void close() throws Exception {
@@ -100,7 +110,13 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable, Serializable
     public CoordinatorImpl(CostEstimator estimator, Executor executor) {
         this.estimator = estimator;
         this.executor = executor;
-        this.coordinatorHost = NetworkUtil.getIPHost();
+
+        coordinatorHost = NetworkUtil.getIPHost();
+        // TODO should be the same as parallelism
+        statsSinksCounter = 4;
+
+        final Object parametersMonitor = new Object();
+
         try {
             LOG.info("starting a statistics server on port 1337");
             statisticsServer = new StatisticsHandling.NIOServer(1337, target -> {
@@ -114,37 +130,80 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable, Serializable
                                 Map.Entry::getValue
                         ));
 
+                        LOG.info("stats arrived at target " + target);
+                        synchronized (parametersMonitor) {
+                            parametersMapList.add(currentParametersMap);
+                            if (parametersMapList.size() < statsSinksCounter) {
+                                LOG.info("not all stats arrived yet");
+                                return;
+                            } else if (parametersMapList.size() > statsSinksCounter) {
+                                LOG.info("uh oh! " + parametersMapList.size() + " " + statsSinksCounter);
+                            }
+                        }
+
+                        LOG.info("all statistics have arrived");
+                        LOG.info("stats map size " + parametersMapList.size());
+
+                        final Map<String, List<Double>> intermediateMap = new HashMap<>();
+                        /*parametersMapList.forEach(it -> it.forEach((k, v) -> {
+                            LOG.info("key " + k);
+                            LOG.info("value " + v);
+                        }));*/
+                        parametersMapList.forEach(element ->
+                                element.forEach((k, v) ->
+                                        intermediateMap.computeIfAbsent(k, x -> new ArrayList<>()).add((Double) v)));
+                        final Map<String, Double> averageParametersMap = new HashMap<>();
+                        intermediateMap.forEach((s, l) -> averageParametersMap.put(s, l.stream().mapToDouble(d -> d).average().getAsDouble()));
+                        averageParametersMap.forEach((k, v) -> {
+                            LOG.info("average key " + k);
+                            LOG.info("average value " + v);
+                            // TODO remove this
+                            if (v > 1250.0) {
+                                intermediateMap.get(k).forEach(it -> LOG.info("value " + it));
+                            }
+                        });
+
+
+                        parametersMapList.clear();
+
                         RelOptCost cost = estimator.getCumulativeCost(
                                 relNode,
-                                currentParametersMap
+                                averageParametersMap
                         );
                         LOG.info("cost " + cost.toString());
 
                         if (!parametersMap.isEmpty()) {
-                            if (checkNextStats && currentParametersMap.entrySet().stream().allMatch((entry -> entry.getValue() instanceof Double && Math.abs((Double)entry.getValue() - (Double)parametersMap.get(entry.getKey())) < 100))) {
+                            LOG.info("check next stats " + checkNextStats);
+                            // TODO replace with something numerical and increase the margin
+
+                            if (checkNextStats && averageParametersMap.entrySet().stream().allMatch((entry -> entry.getValue() != null && Math.abs(entry.getValue() - (Double)parametersMap.get(entry.getKey())) < 0.51 * (Double)parametersMap.get(entry.getKey())))) {
                                 checkNextStats = false;
                                 LOG.info("next stats important enough");
                                 LOG.info("old stats");
                                 parametersMap.forEach((key, value1) -> LOG.info("key " + key + " value " + value1));
                                 LOG.info("current stats");
-                                currentParametersMap.forEach((key, value1) -> LOG.info("key " + key + " value " + value1));
+                                averageParametersMap.forEach((key, value1) -> LOG.info("key " + key + " value " + value1));
 
-                                tryNewGraph(0, currentParametersMap);
-                            } else if (!checkNextStats && currentParametersMap.entrySet().stream().anyMatch((entry -> entry.getValue() instanceof Double && Math.abs((Double)entry.getValue() - (Double)parametersMap.get(entry.getKey())) > 150))) {
+                                if (switchGraphs) {
+                                    tryNewGraph(0, averageParametersMap);
+                                }
+                            } else if (!checkNextStats && averageParametersMap.entrySet().stream().anyMatch((entry -> entry.getValue() != null && Math.abs(entry.getValue() - (Double)parametersMap.get(entry.getKey())) > 0.3 * (Double)parametersMap.get(entry.getKey())))) {
                                 checkNextStats = true;
                                 LOG.info("check next stats");
                                 LOG.info("old stats");
                                 parametersMap.forEach((key, value1) -> LOG.info("key " + key + " value " + value1));
                                 LOG.info("current stats");
-                                currentParametersMap.forEach((key, value1) -> LOG.info("key " + key + " value " + value1));
+                                averageParametersMap.forEach((key, value1) -> LOG.info("key " + key + " value " + value1));
+                            } else {
+                                checkNextStats = false;
                             }
                         }
-                        parametersMap = currentParametersMap;
+                        parametersMap = averageParametersMap;
                     }
 
                     @Override
                     public void onError(Throwable t) {
-                        LOG.error("statistics server error");
+                        LOG.error("statistics server error", t);
                         t.printStackTrace();
                     }
 
@@ -201,6 +260,12 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable, Serializable
     }
 
     @Override
+    public RunningSqlQueryJob start(SqlQueryJob sqlQueryJob, boolean switchGraphs) {
+        this.switchGraphs = switchGraphs;
+        return start(sqlQueryJob);
+    }
+
+    @Override
     public RunningSqlQueryJob start(SqlQueryJob sqlQueryJob) {
         final var pipeline = Pipeline.create();
         final var beamRelNode = createPipeline(pipeline, sqlQueryJob, QueryPlanner.QueryParameters.ofNone());
@@ -218,6 +283,19 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable, Serializable
     @Override
     public void stop(RunningSqlQueryJob runningSqlQueryJob) {
         // TODO: 7/17/21 implement me
+    }
+
+    @Override
+    public boolean isRunning() throws InterruptedException, ExecutionException {
+        final CompletableFuture<JobStatus> status = executor.currentJobClient().getJobStatus();
+        while (!status.isDone()) {
+            LOG.info("waiting on status");
+            Thread.sleep(500);
+        }
+        final JobStatus res = status.get();
+        LOG.info("current status " + res);
+        // TODO is it possible to accidentally catch the moment when the first job has been cancelled
+        return res.equals(JobStatus.RUNNING);
     }
 
     @Override
@@ -248,7 +326,7 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable, Serializable
         final RelOptCost newCost = estimator.getCumulativeCost(relNode, parametersMap);
         final RelOptCost currentCost = estimator.getCumulativeCost(runningJobs.get(0).beamRelNode, parametersMap);
         LOG.info("new cost " + newCost + " old cost " + currentCost);
-        if (newCost.isLt(currentCost) && !currentCost.minus(newCost).isLt(BeamCostModel.FACTORY.makeCost(50.0, 0.0))) {
+        if (newCost.isLt(currentCost)) {
             try {
                 LOG.info("trying a new graph");
                 executor.startOrUpdate(pipeline, null);
@@ -355,11 +433,10 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable, Serializable
 
         pipeline.getCoderRegistry().registerCoderForClass(Latency.class, Latency.CODER);
 
-        /*final PCollection<Latency> latencies = sqlQueryPCollection.apply(Combine.globally(new LatencyCombineFn()).withoutDefaults());
-        sqlQueryJob.latencyOutputs().filter(Objects::nonNull).forEach(latencies::apply);*/
+        final PCollection<Latency> latencies = sqlQueryPCollection.apply(Combine.globally(new LatencyCombineFn()).withoutDefaults());
+        sqlQueryJob.latencyOutputs().filter(Objects::nonNull).forEach(latencies::apply);
 
-        sqlQueryPCollection.apply(Combine.globally(new LatencyCombineFn()).withoutDefaults())
-                .apply(ParDo.of(new LatencyLoggingFunction()));
+        latencies.apply(ParDo.of(new LatencyLoggingFunction()));
 
         sqlQueryJob.outputs().forEach(sqlQueryPCollection::apply);
         return beamRelNode;

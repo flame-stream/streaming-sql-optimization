@@ -293,6 +293,10 @@ public class GeneratorConfig implements Serializable {
         throw new RuntimeException("internal eventsPerEpoch incorrect"); // can't reach
     }
 
+    public NexmarkConfiguration getNexmarkConfiguration() {
+        return configuration;
+    }
+
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();

@@ -4,8 +4,11 @@ import org.apache.beam.sdk.schemas.Schema;
 import org.apache.beam.sdk.transforms.DoFn;
 import org.apache.beam.sdk.values.Row;
 import org.joda.time.DateTime;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class LatencyToClickhouse extends DoFn<Latency, Row> {
+    private static Logger LOG = LoggerFactory.getLogger("latency");
 
     // TODO this thing literally copies the test source configuration, can we unite that somehow
     public int personProportion;
@@ -49,6 +52,7 @@ public class LatencyToClickhouse extends DoFn<Latency, Row> {
     @ProcessElement
     public void processElement(ProcessContext context) {
         Latency latency = context.element();
+        LOG.info("writing to clickhouse " + latency);
         Row row = Row.withSchema(SCHEMA)
                 .addValues(experimentNumber,
                         personProportion, auctionProportion, bidProportion,

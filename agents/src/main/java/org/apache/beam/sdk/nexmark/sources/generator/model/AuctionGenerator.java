@@ -49,27 +49,19 @@ public class AuctionGenerator {
 
     /** Generate and return a random auction with next available id. */
     public static Auction nextAuction(
-            long eventsCountSoFar, long eventId, Random random, long timestamp, GeneratorConfig config) {
+            long eventsCountSoFar, long eventId, Random random, long timestamp, GeneratorConfig config, long personCountInCurrentWindow) {
 
         long id = lastBase0AuctionId(eventId, config) + GeneratorConfig.FIRST_AUCTION_ID;
 
         long seller;
-        seller = nextBase0PersonId(eventId, random, config);
         // Here P(auction will be for a hot seller) = 1 - 1/hotSellersRatio.
-        /*if (random.nextInt(config.getHotSellersRatio()) > 0) {
+        if (random.nextInt(config.getHotSellersRatio()) > 0) {
             // Choose the first person in the batch of last HOT_SELLER_RATIO people.
             seller = (lastBase0PersonId(eventId, config) / HOT_SELLER_RATIO) * HOT_SELLER_RATIO;
-
-            *//*if (eventId >= 2 * 2500 * 10 && eventId < 3 * 2500 * 10) {
-                LOG.info("seller1 " + seller);
-            }*//*
         } else {
-            seller = nextBase0PersonId(eventId, random, config);
-
-            *//*if (eventId >= 2 * 2500 * 10 && eventId < 3 * 2500 * 10) {
-                LOG.info("seller2 " + seller);
-            }*//*
-        }*/
+            //seller = nextBase0PersonId(eventId, random, config);
+            seller = nextBase0PersonId(eventId, random, config, personCountInCurrentWindow);
+        }
         seller += GeneratorConfig.FIRST_PERSON_ID;
 
         long category = GeneratorConfig.FIRST_CATEGORY_ID + random.nextInt(NUM_CATEGORIES);

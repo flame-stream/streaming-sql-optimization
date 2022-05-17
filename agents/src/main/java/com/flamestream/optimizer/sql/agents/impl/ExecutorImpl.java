@@ -182,6 +182,11 @@ public class ExecutorImpl implements Executor, Serializable, AutoCloseable {
         //return currentPipeline;
     }
 
+    @Override
+    public JobClient currentJobClient() {
+        return client;
+    }
+
     public static class SourceCommunicator implements AutoCloseable {
         private final ManagedChannel managedChannel;
         private final WorkerServiceGrpc.WorkerServiceStub stub;

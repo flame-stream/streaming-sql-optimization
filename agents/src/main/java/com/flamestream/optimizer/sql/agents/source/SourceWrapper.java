@@ -28,6 +28,7 @@ import java.util.NoSuchElementException;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 
 // TODO fix nullability annotations, remove all other annotations
 public class SourceWrapper<T, U extends UnboundedSource.CheckpointMark> extends UnboundedSource<T, U> {
@@ -67,7 +68,10 @@ public class SourceWrapper<T, U extends UnboundedSource.CheckpointMark> extends 
     @Override
     public List<SourceWrapper<T, U>> split(int desiredNumSplits, PipelineOptions options) throws Exception {
         LOG.info("split");
-        return List.of(this);
+        return source.split(desiredNumSplits, options).stream()
+                .map(it -> new SourceWrapper<>(it, holdUntilResume, checkpointMarkSerialized, coordinatorHost))
+                .collect(Collectors.toList());
+//        return List.of(this);
     }
 
     @Override
@@ -326,7 +330,7 @@ public class SourceWrapper<T, U extends UnboundedSource.CheckpointMark> extends 
 
                     @Override
                     public void onError(Throwable t) {
-                        t.printStackTrace();
+                        LOG.error("checkpoints stream observer error", t);
                     }
 
                     @Override
@@ -342,11 +346,14 @@ public class SourceWrapper<T, U extends UnboundedSource.CheckpointMark> extends 
                 } catch (IOException e) {
                     LOG.info("error while encoding the checkpoint", e);
                 }
+//                LOG.info("sending checkpoint " + checkpoint);
                 checkpoints.onNext(Services.Checkpoint.newBuilder().setCheckpoint(ByteString.copyFrom(baos.toByteArray())).build());
+//                LOG.info("checkpoint sent");
             }
 
             @Override
             public void close() {
+                LOG.info("closing the checkpoints client");
                 checkpoints.onCompleted();
                 managedChannel.shutdown();
                 while (true) {
@@ -357,6 +364,7 @@ public class SourceWrapper<T, U extends UnboundedSource.CheckpointMark> extends 
                         managedChannel.shutdownNow();
                     }
                 }
+                LOG.info("checkpoints client closed");
             }
         }
 

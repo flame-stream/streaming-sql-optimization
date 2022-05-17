@@ -119,11 +119,16 @@ public class TestSource {
     ) {
         final NexmarkConfiguration config = NexmarkConfiguration.DEFAULT;
         config.numEvents = numberEvents;
+
         config.isRateLimited = true;
         config.streamTimeout = 15 * 60;
 //        config.useWallclockEventTime = true;
         config.useWallclockEventTime = false;
-        config.numEventGenerators = 1;
+//        config.numEventGenerators = 1;
+
+
+        config.numEventGenerators = 4;
+
         config.probDelayedEvent = 0.0;
         config.occasionalDelaySec = 0;
         config.firstEventRate = ratePerSec;

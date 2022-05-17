@@ -41,7 +41,7 @@ public class BidGenerator {
     private static final int HOT_BIDDER_RATIO = 100;
 
     /** Generate and return a random bid with next available id. */
-    public static Bid nextBid(long eventId, Random random, long timestamp, GeneratorConfig config) {
+    public static Bid nextBid(long eventId, Random random, long timestamp, GeneratorConfig config, long personCountInCurrentWindow) {
 
         long auction;
         // Here P(bid will be for a hot auction) = 1 - 1/hotAuctionRatio.
@@ -55,14 +55,14 @@ public class BidGenerator {
 
         long bidder;
         // Here P(bid will be by a hot bidder) = 1 - 1/hotBiddersRatio
-        bidder = nextBase0PersonId(eventId, random, config);
-        /*if (random.nextInt(config.getHotBiddersRatio()) > 0) {
+        if (random.nextInt(config.getHotBiddersRatio()) > 0) {
             // Choose the second person (so hot bidders and hot sellers don't collide) in the batch of
             // last HOT_BIDDER_RATIO people.
             bidder = (lastBase0PersonId(eventId, config) / HOT_BIDDER_RATIO) * HOT_BIDDER_RATIO + 1;
         } else {
-            bidder = nextBase0PersonId(eventId, random, config);
-        }*/
+            //bidder = nextBase0PersonId(eventId, random, config);
+            bidder = nextBase0PersonId(eventId, random, config, personCountInCurrentWindow);
+        }
         bidder += GeneratorConfig.FIRST_PERSON_ID;
 
         long price = PriceGenerator.nextPrice(random);

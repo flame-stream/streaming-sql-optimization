@@ -308,6 +308,7 @@ public class UnboundedEventSource extends UnboundedSource<Event, GeneratorCheckp
         List<UnboundedEventSource> results = new ArrayList<>();
         // Ignore desiredNumSplits and use numEventGenerators instead.
         for (GeneratorConfig subConfig : config.split(numEventGenerators)) {
+            LOG.info("split subconfig max events " + subConfig.maxEvents);
             results.add(new UnboundedEventSource(subConfig, 1, watermarkHoldbackSec, isRateLimited));
         }
         return results;

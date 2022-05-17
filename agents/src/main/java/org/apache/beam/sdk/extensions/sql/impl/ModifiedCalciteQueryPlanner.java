@@ -289,9 +289,9 @@ public class ModifiedCalciteQueryPlanner implements QueryPlanner {
                         final var uniqueLeft = uniqueValues(rel, mq, equals.getOperands().get(0));
                         final var uniqueRight = uniqueValues(rel, mq, equals.getOperands().get(1));
                         if (uniqueLeft != null && uniqueRight != null) {
-                            sel *= 1 / Double.min(uniqueLeft, uniqueRight);
-                            //sel *= Double.max(uniqueLeft, uniqueRight) * 0.0001;
-                            //sel *= Double.min(uniqueLeft, uniqueRight) / uniqueLeft / uniqueRight;
+//                            sel *= 1 / Double.min(uniqueLeft, uniqueRight);
+                            sel *= Double.min(uniqueLeft, uniqueRight) * 0.0001;
+//                            sel *= Double.min(uniqueLeft, uniqueRight) / uniqueLeft / uniqueRight;
 
                         } else {
                             sel *= 0.15D;

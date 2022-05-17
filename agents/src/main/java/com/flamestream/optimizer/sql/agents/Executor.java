@@ -1,6 +1,7 @@
 package com.flamestream.optimizer.sql.agents;
 
 import org.apache.beam.sdk.Pipeline;
+import org.apache.flink.core.execution.JobClient;
 
 import javax.annotation.Nullable;
 import java.util.function.Consumer;
@@ -16,6 +17,8 @@ public interface Executor {
 
     @Nullable
     Pipeline current();
+
+    JobClient currentJobClient();
 
     enum ChangingStatus {
         CHANGING_STARTED,

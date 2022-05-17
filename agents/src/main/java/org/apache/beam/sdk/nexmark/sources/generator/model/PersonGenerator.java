@@ -81,6 +81,17 @@ public class PersonGenerator {
         return numPeople - activePeople + n;
     }
 
+    public static long nextBase0PersonId(long eventId, Random random, GeneratorConfig config, long personCountInCurrentWindow) {
+        long numPeople = lastBase0PersonId(eventId, config) + 1;
+        if (personCountInCurrentWindow == 0) {
+            return numPeople;
+        }
+        long activePeople = Math.min(Math.min(numPeople, config.getNumActivePeople()), personCountInCurrentWindow);
+        long n = nextLong(random, activePeople);
+        //LOG.info("numPeople " + numPeople + " personCountCur " + personCountInCurrentWindow + " n " + n);
+        return numPeople - activePeople + n;
+    }
+
     /**
      * Return the last valid person id (ignoring FIRST_PERSON_ID). Will be the current person id if
      * due to generate a person.

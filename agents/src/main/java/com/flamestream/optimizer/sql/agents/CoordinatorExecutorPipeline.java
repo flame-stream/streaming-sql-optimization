@@ -7,6 +7,7 @@ import com.flamestream.optimizer.sql.agents.latency.Latency;
 import com.flamestream.optimizer.sql.agents.latency.LatencyToClickhouse;
 import com.flamestream.optimizer.sql.agents.testutils.TestSource;
 import com.flamestream.optimizer.sql.agents.util.NetworkUtil;
+import org.apache.beam.sdk.io.clickhouse.ClickHouseIO;
 import org.apache.beam.sdk.nexmark.model.Event;
 import org.apache.beam.sdk.transforms.DoFn;
 import org.apache.beam.sdk.transforms.PTransform;
@@ -19,19 +20,21 @@ import org.apache.beam.sdk.values.PDone;
 import org.apache.beam.sdk.values.Row;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.joda.time.Duration;
-import org.apache.beam.sdk.io.clickhouse.ClickHouseIO;
 
 import java.io.Serializable;
 import java.util.Collection;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
 public class CoordinatorExecutorPipeline {
+
     public static void fromSqlQueryJob(
             final CostEstimator costEstimator,
             final @NonNull Collection<UserSource> inputs,
             final String optionsArguments,
-            final Coordinator.SqlQueryJob job) {
+            final Coordinator.SqlQueryJob job,
+            final boolean switchGraphs) {
 
         final Executor executor = new ExecutorImpl(optionsArguments);
         final Coordinator coordinator = new CoordinatorImpl(costEstimator, executor);
@@ -40,18 +43,28 @@ public class CoordinatorExecutorPipeline {
             coordinator.registerInput(input.getSource(), input.getSchema(), input.getTableMapping(),input.getAdditionalTransforms() );
         }
 
-        coordinator.start(job);
+        coordinator.start(job, switchGraphs);
         try {
-            Thread.sleep(1000 * 60 * 15);
-        } catch (Exception e) { }
+            while (coordinator.isRunning()) {
+                System.out.println("running");
+                Thread.sleep(TimeUnit.MINUTES.toMillis(1));
+            }
+            System.out.println("finished");
+        } catch (Exception e) {
+            System.out.println("error!");
+            e.printStackTrace();
+        }
     }
 
     public static void main(String[] args) {
+        System.out.println(String.join(" ", args));
+
         String flinkMaster = args.length > 0 ? args[0] : "localhost";
         System.out.println(flinkMaster);
 
-        int window = args.length == 7 ? Integer.parseInt(args[6]) : 10;
-        TestSourceConfiguration config = args.length != 7 ? null : new TestSourceConfiguration(
+        // TODO there must be some library that does it better
+        int window = args.length >= 7 ? Integer.parseInt(args[6]) : 10;
+        TestSourceConfiguration config = args.length < 7 ? null : new TestSourceConfiguration(
                 Integer.parseInt(args[1]),
                 Integer.parseInt(args[2]),
                 Integer.parseInt(args[3]),
@@ -59,6 +72,18 @@ public class CoordinatorExecutorPipeline {
                 Integer.parseInt(args[5]),
                 window
         );
+        int plan = -1;
+        if (args.length >= 8) {
+            plan = Integer.parseInt(args[7]);
+        }
+        boolean switchGraphs = true;
+        if (args.length >= 9) {
+            switchGraphs = Boolean.parseBoolean(args[8]);
+        }
+        int experimentNumber = 0;
+        if (args.length >= 10) {
+            experimentNumber = Integer.parseInt(args[9]);
+        }
 
         final UserSource<Event> source = new UserSource<>(
                 config == null ? TestSource.getTestSource() : TestSource.getConfiguredTestSource(config.personProportion, config.auctionProportion, config.bidProportion, config.numberEvents, config.ratePerSec),
@@ -78,7 +103,8 @@ public class CoordinatorExecutorPipeline {
                         + "       INNER JOIN Bid B on B.bidder = P.id",
                 window,
                 config,
-                clickhouseHost
+                clickhouseHost,
+                experimentNumber
         );
         final Coordinator.SqlQueryJob plan2 = new TestSqlJob(
                 " SELECT "
@@ -88,13 +114,15 @@ public class CoordinatorExecutorPipeline {
                         + "    INNER JOIN Auction A on A.seller = P.id ",
                 window,
                 config,
-                clickhouseHost
+                clickhouseHost,
+                experimentNumber
         );
 
         // should probably be configured some other way but this was the easiest
-        final String argsString = "--runner=FlinkRunner --streaming=true --flinkMaster=" + flinkMaster + ":8081";
+        final String argsString = "--runner=FlinkRunner --streaming=true --parallelism=4 --flinkMaster=" + flinkMaster + ":8081";
 //        final String argsString = "--runner=FlinkRunner --streaming=true --flinkMaster=" + flinkMaster + ":8082";
-        CoordinatorExecutorPipeline.fromSqlQueryJob(new CostEstimatorImpl(), List.of(source), argsString, plan1);
+        final Coordinator.SqlQueryJob job = plan == 1 ? plan1 : plan2;
+        CoordinatorExecutorPipeline.fromSqlQueryJob(new CostEstimatorImpl(), List.of(source), argsString, job, switchGraphs);
     }
 
     public static class RowToStringFunction extends DoFn<Row, String> {
@@ -119,12 +147,18 @@ public class CoordinatorExecutorPipeline {
         private final int window;
         private final TestSourceConfiguration config;
         private final String clickhouseHost;
+        private final int experimentNumber;
 
-        TestSqlJob(final String query, final int window, final TestSourceConfiguration config, final String clickhouseHost) {
+        TestSqlJob(final String query,
+                   final int window,
+                   final TestSourceConfiguration config,
+                   final String clickhouseHost,
+                   final int experimentNumber) {
             this.query = query;
             this.window = window;
             this.config = config;
             this.clickhouseHost = clickhouseHost;
+            this.experimentNumber = experimentNumber;
         }
 
         @Override
@@ -154,7 +188,7 @@ public class CoordinatorExecutorPipeline {
                         PCollection<Row> rows = latencies.apply(ParDo.of(new LatencyToClickhouse(
                                 config.personProportion, config.auctionProportion, config.bidProportion,
                                 // TODO experiment number
-                                config.numberEvents, config.ratePerSec, config.window, 0)))
+                                config.numberEvents, config.ratePerSec, config.window, experimentNumber)))
                                 .setRowSchema(LatencyToClickhouse.SCHEMA);
                         return rows.apply("ClickhouseWrite",
                                 ClickHouseIO.write("jdbc:clickhouse://" + clickhouseHost + ":8123/optimizer_log?user=default&password=optimizer",

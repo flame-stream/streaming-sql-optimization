@@ -47,9 +47,6 @@ public class StatisticsHandling {
 
         @ProcessElement
         public void processElement(ProcessContext c, BoundedWindow window) {
-            if (window.toString().equals("[2021-11-23T19:29:00.000Z..2021-11-23T19:29:20.000Z)")) {
-                LOG.info(c.element().toString());
-            }
         }
 
         @OnWindowExpiration

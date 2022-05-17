@@ -62,7 +62,7 @@ public class CoordinatorExecutorPipelineTest {
 //        final String argsString = "--runner=FlinkRunner --streaming=true --manageResources=false --monitorJobs=true --flinkMaster=[local] --tempLocation=" + folder.getRoot().getAbsolutePath();
         final String[] args = argsString.split(" ");
         final PipelineOptions options = PipelineOptionsFactory.fromArgs(args).withValidation().as(NexmarkOptions.class);
-        CoordinatorExecutorPipeline.fromSqlQueryJob(new CostEstimatorImpl(), List.of(source), argsString, plan1);
+        CoordinatorExecutorPipeline.fromSqlQueryJob(new CostEstimatorImpl(), List.of(source), argsString, plan1, true);
     }
 
     public static class LoggingFunction extends DoFn<String, String> {

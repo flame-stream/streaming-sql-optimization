@@ -12,6 +12,7 @@ import org.apache.beam.sdk.values.*;
 import org.checkerframework.checker.nullness.compatqual.NonNullType;
 
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 
@@ -28,8 +29,10 @@ public interface Coordinator {
     Stream<UnboundedSource<?, @NonNullType ? extends UnboundedSource.CheckpointMark>> inputs();
 
     RunningSqlQueryJob start(SqlQueryJob sqlQueryJob);
+    RunningSqlQueryJob start(SqlQueryJob sqlQueryJob, boolean switchGraphs);
     void stop(RunningSqlQueryJob runningSqlQueryJob);
     Stream<? extends RunningSqlQueryJob> runningJobs();
+    boolean isRunning() throws InterruptedException, ExecutionException;
 
     interface SqlQueryJob {
         String query();
