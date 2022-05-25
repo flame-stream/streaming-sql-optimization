@@ -18,6 +18,7 @@ import org.apache.beam.sdk.transforms.windowing.WindowFn;
 import org.apache.beam.sdk.values.PCollection;
 import org.apache.beam.sdk.values.PDone;
 import org.apache.beam.sdk.values.Row;
+import org.apache.flink.api.common.JobStatus;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.joda.time.Duration;
 
@@ -43,16 +44,22 @@ public class CoordinatorExecutorPipeline {
             coordinator.registerInput(input.getSource(), input.getSchema(), input.getTableMapping(),input.getAdditionalTransforms() );
         }
 
-        coordinator.start(job, switchGraphs);
-        try {
-            while (coordinator.isRunning()) {
-                System.out.println("running");
-                Thread.sleep(TimeUnit.MINUTES.toMillis(1));
+        while (true) {
+            coordinator.start(job, switchGraphs);
+            try {
+                while (coordinator.status().equals(JobStatus.RUNNING)) {
+                    System.out.println("running");
+                    Thread.sleep(TimeUnit.MINUTES.toMillis(1));
+                }
+                System.out.println("finished");
+                if (!coordinator.status().equals(JobStatus.FAILING) && !coordinator.status().equals(JobStatus.FAILED)) {
+                    break;
+                }
+                System.out.println("Job failed, retrying");
+            } catch (Exception e) {
+                System.out.println("error!");
+                e.printStackTrace();
             }
-            System.out.println("finished");
-        } catch (Exception e) {
-            System.out.println("error!");
-            e.printStackTrace();
         }
     }
 

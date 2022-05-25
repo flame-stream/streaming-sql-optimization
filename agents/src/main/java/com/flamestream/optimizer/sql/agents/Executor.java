@@ -19,6 +19,7 @@ public interface Executor {
     Pipeline current();
 
     JobClient currentJobClient();
+    public void setRunning(boolean running);
 
     enum ChangingStatus {
         CHANGING_STARTED,

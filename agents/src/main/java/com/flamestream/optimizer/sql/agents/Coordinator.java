@@ -9,6 +9,7 @@ import org.apache.beam.sdk.transforms.SerializableFunction;
 import org.apache.beam.sdk.transforms.windowing.BoundedWindow;
 import org.apache.beam.sdk.transforms.windowing.WindowFn;
 import org.apache.beam.sdk.values.*;
+import org.apache.flink.api.common.JobStatus;
 import org.checkerframework.checker.nullness.compatqual.NonNullType;
 
 import java.util.Map;
@@ -32,7 +33,7 @@ public interface Coordinator {
     RunningSqlQueryJob start(SqlQueryJob sqlQueryJob, boolean switchGraphs);
     void stop(RunningSqlQueryJob runningSqlQueryJob);
     Stream<? extends RunningSqlQueryJob> runningJobs();
-    boolean isRunning() throws InterruptedException, ExecutionException;
+    JobStatus status() throws InterruptedException, ExecutionException;
 
     interface SqlQueryJob {
         String query();

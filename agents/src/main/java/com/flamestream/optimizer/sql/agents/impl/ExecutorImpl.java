@@ -167,6 +167,8 @@ public class ExecutorImpl implements Executor, Serializable, AutoCloseable {
             }
         }
         else {
+            clearState();
+
             running = true;
             PipelineResult result = oldRunner.run(pipeline);
             if (result instanceof FlinkDetachedRunnerResultWithJobClient) {
@@ -185,6 +187,17 @@ public class ExecutorImpl implements Executor, Serializable, AutoCloseable {
     @Override
     public JobClient currentJobClient() {
         return client;
+    }
+
+    @Override
+    public void setRunning(boolean running) {
+        this.running = running;
+    }
+
+    private void clearState() {
+        jobCounter = 0;
+        currentSources.clear();
+        newSources.clear();
     }
 
     public static class SourceCommunicator implements AutoCloseable {

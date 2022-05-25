@@ -49,6 +49,7 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -68,14 +69,14 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable, Serializable
     private final List<Running> runningJobs = new ArrayList<>();
 
     private int statsSinksCounter;
-    private CountDownLatch latch = null;
 
     private BeamRelNode currentGraph = null;
     private ByteString checkpointMarkString = null;
 
-    private Map<String, ?> parametersMap = new HashMap<>();
+    private Map<String, Double> parametersMap = new HashMap<>();
     private List<Map<String, ?>> parametersMapList = new ArrayList<>();
     private boolean checkNextStats = false;
+    private CountDownLatch latch = null;
 
     private boolean switchGraphs = true;
 
@@ -130,16 +131,35 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable, Serializable
                                 Map.Entry::getValue
                         ));
 
+                        boolean firstArrived = false;
                         LOG.info("stats arrived at target " + target);
                         synchronized (parametersMonitor) {
                             parametersMapList.add(currentParametersMap);
-                            if (parametersMapList.size() < statsSinksCounter) {
-                                LOG.info("not all stats arrived yet");
-                                return;
-                            } else if (parametersMapList.size() > statsSinksCounter) {
-                                LOG.info("uh oh! " + parametersMapList.size() + " " + statsSinksCounter);
+                            if (latch == null) {
+                                latch = new CountDownLatch(statsSinksCounter - 1);
+                                firstArrived = true;
                             }
                         }
+
+                        if (firstArrived) {
+                            boolean res = false;
+                            try {
+                                res = latch.await(3, TimeUnit.SECONDS);
+                            } catch (InterruptedException e) {
+                                LOG.error("error while waiting for stats", e);
+                            }
+
+                            latch = null;
+                            LOG.info("wait for stats " + (res ? "completed" : "timed out"));
+                            if (!res) {
+                                return;
+                            }
+                        } else {
+                            latch.countDown();
+                            LOG.info("not all stats have arrived yet");
+                            return;
+                        }
+
 
                         LOG.info("all statistics have arrived");
                         LOG.info("stats map size " + parametersMapList.size());
@@ -157,10 +177,6 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable, Serializable
                         averageParametersMap.forEach((k, v) -> {
                             LOG.info("average key " + k);
                             LOG.info("average value " + v);
-                            // TODO remove this
-                            if (v > 1250.0) {
-                                intermediateMap.get(k).forEach(it -> LOG.info("value " + it));
-                            }
                         });
 
 
@@ -174,9 +190,7 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable, Serializable
 
                         if (!parametersMap.isEmpty()) {
                             LOG.info("check next stats " + checkNextStats);
-                            // TODO replace with something numerical and increase the margin
-
-                            if (checkNextStats && averageParametersMap.entrySet().stream().allMatch((entry -> entry.getValue() != null && Math.abs(entry.getValue() - (Double)parametersMap.get(entry.getKey())) < 0.51 * (Double)parametersMap.get(entry.getKey())))) {
+                            if (checkNextStats && areParametersSimilarEnough(parametersMap, averageParametersMap, 0.51)) {
                                 checkNextStats = false;
                                 LOG.info("next stats important enough");
                                 LOG.info("old stats");
@@ -187,7 +201,7 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable, Serializable
                                 if (switchGraphs) {
                                     tryNewGraph(0, averageParametersMap);
                                 }
-                            } else if (!checkNextStats && averageParametersMap.entrySet().stream().anyMatch((entry -> entry.getValue() != null && Math.abs(entry.getValue() - (Double)parametersMap.get(entry.getKey())) > 0.3 * (Double)parametersMap.get(entry.getKey())))) {
+                            } else if (!checkNextStats && areParametersDifferentEnough(parametersMap, averageParametersMap, 0.3)) {
                                 checkNextStats = true;
                                 LOG.info("check next stats");
                                 LOG.info("old stats");
@@ -210,6 +224,29 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable, Serializable
                     @Override
                     public void onCompleted() {
                         LOG.info("statistics server: completed");
+                    }
+
+                    private boolean areParametersDifferentEnough(Map<String, Double> parameters,
+                                                                 Map<String, Double> currentParameters,
+                                                                 double percentage) {
+                        return currentParameters.entrySet().stream().anyMatch((entry -> {
+                            final String key = entry.getKey();
+                            final Double value = entry.getValue();
+                            final Double paramValue = parameters.get(key);
+                            return value != null && Math.abs(value - paramValue) > percentage * paramValue;
+                        }));
+                    }
+
+                    private boolean areParametersSimilarEnough(Map<String, Double> parameters,
+                                                               Map<String, Double> currentParameters,
+                                                               double percentage) {
+                        return currentParameters.entrySet().stream().filter((entry -> {
+                            final String key = entry.getKey();
+                            final Double value = entry.getValue();
+                            final Double paramValue = parameters.get(key);
+                            LOG.info("key " + key + " diff " + (value != null ? Math.abs(value - paramValue) : ""));
+                            return value != null && Math.abs(value - paramValue) < percentage * paramValue;
+                        })).count() >= parameters.size() * 2L / 3;
                     }
                 };
             });
@@ -267,12 +304,15 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable, Serializable
 
     @Override
     public RunningSqlQueryJob start(SqlQueryJob sqlQueryJob) {
+        clearState();
+
         final var pipeline = Pipeline.create();
         final var beamRelNode = createPipeline(pipeline, sqlQueryJob, QueryPlanner.QueryParameters.ofNone());
         final var runningSqlQueryJob = new Running(sqlQueryJob, beamRelNode);
         runningJobs.add(runningSqlQueryJob);
         try {
             LOG.info("starting job on executor");
+            executor.setRunning(false);
             executor.startOrUpdate(pipeline, null);
         } catch (InterruptedException e) {
             e.printStackTrace();
@@ -286,7 +326,7 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable, Serializable
     }
 
     @Override
-    public boolean isRunning() throws InterruptedException, ExecutionException {
+    public JobStatus status() throws InterruptedException, ExecutionException {
         final CompletableFuture<JobStatus> status = executor.currentJobClient().getJobStatus();
         while (!status.isDone()) {
             LOG.info("waiting on status");
@@ -295,12 +335,23 @@ public class CoordinatorImpl implements Coordinator, AutoCloseable, Serializable
         final JobStatus res = status.get();
         LOG.info("current status " + res);
         // TODO is it possible to accidentally catch the moment when the first job has been cancelled
-        return res.equals(JobStatus.RUNNING);
+        return res;
     }
 
     @Override
     public Stream<? extends RunningSqlQueryJob> runningJobs() {
         return runningJobs.stream();
+    }
+
+    private void clearState() {
+        runningJobs.clear();
+
+        currentGraph = null;
+        checkpointMarkString = null;
+
+        parametersMap.clear();
+        parametersMapList.clear();
+        checkNextStats = false;
     }
 
     private void tryNewGraph(int runningJobIndex) {
